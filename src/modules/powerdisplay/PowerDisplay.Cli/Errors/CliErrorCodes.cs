@@ -16,4 +16,6 @@ public static class CliErrorCodes
     public const string HardwareFailure = "HARDWARE_FAILURE";
     public const string SelectorMissing = "SELECTOR_MISSING";
     public const string ArgumentError = "ARGUMENT_ERROR";
+    public const string Timeout = "TIMEOUT";
+    public const string InternalError = "INTERNAL_ERROR";
 }

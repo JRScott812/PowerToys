@@ -14,4 +14,6 @@ public static class CliExitCodes
     public const int HardwareFailure = 5;
     public const int SelectorMissing = 6;
     public const int ArgumentError = 7;
+    public const int Timeout = 8;
+    public const int InternalError = 9;
 }
