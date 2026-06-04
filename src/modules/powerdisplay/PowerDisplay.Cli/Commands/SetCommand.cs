@@ -357,6 +357,24 @@ public static class SetCommand
         bool requireConfirmation = false,
         string? confirmationSetting = null)
     {
+        if (!supportsCheck)
+        {
+            output.WriteError(new CliErrorResult
+            {
+                Command = "set",
+                Monitor = monitorRef,
+                Error = new CliError
+                {
+                    Code = CliErrorCodes.UnsupportedFeature,
+                    ExitCode = CliExitCodes.UnsupportedFeature,
+                    Setting = settingName,
+                    Message = $"Monitor {monitorRef.Number} ({monitorRef.Name}) does not support {settingName} adjustment",
+                    Hint = $"reason: {unsupportedReason}",
+                },
+            });
+            return CliExitCodes.UnsupportedFeature;
+        }
+
         if (requireConfirmation)
         {
             output.WriteError(new CliErrorResult
@@ -374,24 +392,6 @@ public static class SetCommand
                 },
             });
             return CliExitCodes.ArgumentError;
-        }
-
-        if (!supportsCheck)
-        {
-            output.WriteError(new CliErrorResult
-            {
-                Command = "set",
-                Monitor = monitorRef,
-                Error = new CliError
-                {
-                    Code = CliErrorCodes.UnsupportedFeature,
-                    ExitCode = CliExitCodes.UnsupportedFeature,
-                    Setting = settingName,
-                    Message = $"Monitor {monitorRef.Number} ({monitorRef.Name}) does not support {settingName} adjustment",
-                    Hint = $"reason: {unsupportedReason}",
-                },
-            });
-            return CliExitCodes.UnsupportedFeature;
         }
 
         var resolved = DiscreteValueResolver.TryResolve(vcpCode, settingName, raw, supportedValues, out var valueError);

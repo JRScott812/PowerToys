@@ -199,4 +199,42 @@ public class SetCommandTests
         Assert.AreEqual(CliExitCodes.MonitorNotFound, exit);
         Assert.AreEqual(0, mm.Writes.Count);
     }
+
+    [TestMethod]
+    public async Task Set_PowerOff_UnsupportedMonitor_ReportsUnsupportedNotConfirm()
+    {
+        // Monitor with no power-state capability (no VcpCapabilitiesInfo for 0xD6).
+        var m = new Monitor
+        {
+            MonitorNumber = 1,
+            Id = "MON-1",
+            Name = "Dell",
+            CommunicationMethod = "DDC/CI",
+        };
+        var mm = new FakeMonitorManager(m);
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, PowerState = "0x04" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.UnsupportedFeature, exit);
+        Assert.AreEqual(0, mm.Writes.Count);
+    }
+
+    [TestMethod]
+    public async Task Set_DiscreteReadUnknown_ReportsNullBefore()
+    {
+        // Power-state supported, but the value was never successfully read (ReadValues=None).
+        var m = PowerStateMonitor();
+        m.ReadValues = MonitorReadFlags.None;
+        var mm = new FakeMonitorManager(m);
+        var output = new CapturingOutput();
+
+        // 0x01 (On) needs no confirmation and is in the supported set.
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, PowerState = "0x01" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.IsNull(output.Set!.BeforeRaw);
+        Assert.IsNull(output.Set.BeforeDisplay);
+        Assert.AreEqual(0x01, output.Set.AfterRaw);
+    }
 }
