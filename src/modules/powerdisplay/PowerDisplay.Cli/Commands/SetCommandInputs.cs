@@ -27,4 +27,6 @@ public sealed class SetCommandInputs
     public string? PowerState { get; init; }
 
     public string? Orientation { get; init; }
+
+    public bool ConfirmPowerOff { get; init; }
 }

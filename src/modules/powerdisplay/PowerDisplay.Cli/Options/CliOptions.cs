@@ -17,7 +17,7 @@ public static class CliOptions
         ["--monitor-number", "-n"],
         "Index of the monitor (1-based). Run 'powerdisplay list' to discover.")
     {
-        Arity = ArgumentArity.ZeroOrOne,
+        Arity = ArgumentArity.ExactlyOne,
     };
 
     public static readonly Option<string?> MonitorId = new(
@@ -90,5 +90,33 @@ public static class CliOptions
         "Rotation in degrees: 0, 90, 180, or 270.")
     {
         Arity = ArgumentArity.ExactlyOne,
+    };
+
+    public static readonly Option<int?> TimeoutSeconds = new(
+        ["--timeout"],
+        "Abort the operation after this many seconds (default 30). 0 disables the timeout.")
+    {
+        Arity = ArgumentArity.ExactlyOne,
+    };
+
+    public static readonly Option<bool> Quiet = new(
+        ["--quiet"],
+        "Suppress warning messages on stderr.")
+    {
+        Arity = ArgumentArity.ZeroOrOne,
+    };
+
+    public static readonly Option<bool?> MaxCompatibility = new(
+        ["--max-compatibility"],
+        "Force max-compatibility discovery on/off, overriding the saved PowerDisplay setting.")
+    {
+        Arity = ArgumentArity.ZeroOrOne,
+    };
+
+    public static readonly Option<bool> ConfirmPowerOff = new(
+        ["--confirm-power-off"],
+        "Required to apply a power-state that turns the display off.")
+    {
+        Arity = ArgumentArity.ZeroOrOne,
     };
 }
