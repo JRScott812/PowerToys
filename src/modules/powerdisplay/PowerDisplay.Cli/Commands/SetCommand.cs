@@ -448,8 +448,8 @@ public static class SetCommand
         {
             Monitor = monitorRef,
             Setting = OrientationResolver.SettingName,
-            BeforeRaw = beforeIndex,
-            AfterRaw = index.Value,
+            BeforeRaw = OrientationDegreesValue(beforeIndex),
+            AfterRaw = OrientationDegreesValue(index.Value),
             BeforeDisplay = OrientationDegrees(beforeIndex),
             AfterDisplay = OrientationDegrees(index.Value),
         });
