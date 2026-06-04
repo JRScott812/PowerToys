@@ -10,6 +10,8 @@ public sealed class CliErrorResult
 {
     public bool Ok { get; init; }
 
+    public string Version { get; init; } = CliSchema.Version;
+
     public string Command { get; init; } = string.Empty;
 
     public CliError Error { get; init; } = new();

@@ -8,6 +8,8 @@ public sealed class CliSetResult
 {
     public bool Ok { get; init; } = true;
 
+    public string Version { get; init; } = CliSchema.Version;
+
     public string Command { get; init; } = "set";
 
     public CliMonitorRef Monitor { get; init; } = new();
