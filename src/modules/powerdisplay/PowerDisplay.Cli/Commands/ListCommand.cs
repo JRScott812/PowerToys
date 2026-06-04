@@ -43,5 +43,6 @@ public static class ListCommand
         SupportsColorTemperature = m.SupportsColorTemperature,
         SupportsInputSource = m.SupportsInputSource,
         SupportsPowerState = m.SupportsPowerState,
+        SupportsOrientation = !string.IsNullOrEmpty(m.GdiDeviceName),
     };
 }

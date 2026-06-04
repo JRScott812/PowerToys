@@ -25,4 +25,6 @@ public sealed class CliListMonitor
     public bool SupportsInputSource { get; init; }
 
     public bool SupportsPowerState { get; init; }
+
+    public bool SupportsOrientation { get; init; }
 }
