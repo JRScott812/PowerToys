@@ -43,4 +43,42 @@ public class CliSettingsReaderTests
             File.Delete(tmp);
         }
     }
+
+    [TestMethod]
+    public void Read_HiddenMonitorWithNullId_IsExcluded()
+    {
+        var settings = new PowerDisplaySettings();
+        settings.Properties.Monitors.Add(new MonitorInfo { Id = "MON-A", IsHidden = true });
+        settings.Properties.Monitors.Add(new MonitorInfo { Id = string.Empty, IsHidden = true });
+
+        var tmp = Path.Combine(Path.GetTempPath(), "pd-cli-settings-nullid.json");
+        File.WriteAllText(tmp, settings.ToJsonString());
+        try
+        {
+            var result = CliSettingsReader.Read(tmp);
+            Assert.AreEqual(1, result.HiddenMonitorIds.Count);
+            Assert.IsTrue(result.HiddenMonitorIds.Contains("MON-A"));
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
+    [TestMethod]
+    public void Read_MalformedJson_ReturnsDefault()
+    {
+        var tmp = Path.Combine(Path.GetTempPath(), "pd-cli-settings-malformed.json");
+        File.WriteAllText(tmp, "{ this is not valid json ");
+        try
+        {
+            var result = CliSettingsReader.Read(tmp);
+            Assert.IsFalse(result.MaxCompatibilityMode);
+            Assert.AreEqual(0, result.HiddenMonitorIds.Count);
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
 }

@@ -54,7 +54,7 @@ public static class CliSettingsReader
 
             return new CliRuntimeSettings(props.MaxCompatibilityMode, hidden);
         }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
             Logger.LogWarning($"PowerDisplay CLI: could not read settings ({path}): {ex.Message}");
             return CliRuntimeSettings.Default;
