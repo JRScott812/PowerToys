@@ -5,6 +5,7 @@
 using System;
 using System.CommandLine;
 using System.CommandLine.Parsing;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ManagedCommon;
@@ -12,33 +13,32 @@ using PowerDisplay.Cli.Commands;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Options;
 using PowerDisplay.Cli.Output;
+using PowerDisplay.Cli.Settings;
 using PowerDisplay.Common.Services;
 
 namespace PowerDisplay.Cli;
 
 public static class Program
 {
+    private const int DefaultTimeoutSeconds = 30;
+
     public static async Task<int> Main(string[] args)
     {
-        // Logs go to %LOCALAPPDATA%\Microsoft\PowerToys\PowerDisplay\Logs so any DDC/CI
-        // error in the controllers is recoverable post-mortem. CLI text output stays on
-        // stdout/stderr and is unaffected by the file logger.
-        Logger.InitializeLogger("\\PowerDisplay\\Logs");
-
         var root = BuildRootCommand();
         var parser = new Parser(root);
         var parseResult = parser.Parse(args);
 
-        // Honour --help / -h / -? on any (sub)command. We let System.CommandLine print
-        // and exit; the parse result already has the help-token detected.
-        if (parseResult.Tokens.Count == 0 ||
-            HasHelpToken(parseResult))
+        // Help / version short-circuit through the default invocation pipeline (which owns
+        // the version + help renderers). Done BEFORE the logger is created so a pure
+        // --help/--version invocation has no file-system side effects.
+        if (parseResult.Tokens.Count == 0 || HasHelpToken(parseResult) || HasVersionToken(parseResult))
         {
             return await root.InvokeAsync(args);
         }
 
         var useJson = parseResult.GetValueForOption(CliOptions.Json);
-        ICliOutput output = useJson ? new JsonCliOutput() : new TextCliOutput();
+        var quiet = parseResult.GetValueForOption(CliOptions.Quiet);
+        ICliOutput output = useJson ? new JsonCliOutput(quiet) : new TextCliOutput(quiet);
 
         if (parseResult.Errors.Count > 0)
         {
@@ -59,22 +59,59 @@ public static class Program
             return CliExitCodes.ArgumentError;
         }
 
+        // Logs go to %LOCALAPPDATA%\Microsoft\PowerToys\PowerDisplay\Logs\<version>.
+        Logger.InitializeLogger("\\PowerDisplay\\Logs");
+
+        var timeoutSeconds = parseResult.GetValueForOption(CliOptions.TimeoutSeconds) ?? DefaultTimeoutSeconds;
+        var timedOut = false;
+        Timer? timeoutTimer = null;
+
         try
         {
             using var monitorManager = new MonitorManager();
             using var cts = new CancellationTokenSource();
 
+            var runtime = CliSettingsReader.Read();
+            var maxCompatOverride = parseResult.GetValueForOption(CliOptions.MaxCompatibility);
+            monitorManager.SetMaxCompatibilityMode(maxCompatOverride ?? runtime.MaxCompatibilityMode);
+
+            Console.CancelKeyPress += (_, e) =>
+            {
+                e.Cancel = true;
+                cts.Cancel();
+            };
+
+            if (timeoutSeconds > 0)
+            {
+                timeoutTimer = new Timer(
+                    _ =>
+                    {
+                        timedOut = true;
+                        try
+                        {
+                            cts.Cancel();
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                        }
+                    },
+                    null,
+                    TimeSpan.FromSeconds(timeoutSeconds),
+                    Timeout.InfiniteTimeSpan);
+            }
+
             var command = parseResult.CommandResult.Command;
 
             if (command == root.ListCommand)
             {
-                return await ListCommand.RunAsync(monitorManager, output, cts.Token);
+                return await ListCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, output, cts.Token);
             }
 
             if (command == root.CapabilitiesCommand)
             {
                 return await CapabilitiesCommand.RunAsync(
                     monitorManager,
+                    runtime.HiddenMonitorIds,
                     parseResult.GetValueForOption(CliOptions.MonitorNumber),
                     parseResult.GetValueForOption(CliOptions.MonitorId),
                     output,
@@ -85,6 +122,7 @@ public static class Program
             {
                 return await GetCommand.RunAsync(
                     monitorManager,
+                    runtime.HiddenMonitorIds,
                     parseResult.GetValueForOption(CliOptions.MonitorNumber),
                     parseResult.GetValueForOption(CliOptions.MonitorId),
                     parseResult.GetValueForOption(CliOptions.SettingFilter),
@@ -105,12 +143,12 @@ public static class Program
                     InputSource = parseResult.GetValueForOption(CliOptions.InputSource),
                     PowerState = parseResult.GetValueForOption(CliOptions.PowerState),
                     Orientation = parseResult.GetValueForOption(CliOptions.Orientation),
+                    ConfirmPowerOff = parseResult.GetValueForOption(CliOptions.ConfirmPowerOff),
                 };
 
-                return await SetCommand.RunAsync(monitorManager, inputs, output, cts.Token);
+                return await SetCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, inputs, output, cts.Token);
             }
 
-            // No subcommand picked → print help.
             return await root.InvokeAsync(args);
         }
         catch (OperationCanceledException)
@@ -120,12 +158,14 @@ public static class Program
                 Command = parseResult.CommandResult.Command.Name,
                 Error = new CliError
                 {
-                    Code = CliErrorCodes.HardwareFailure,
-                    ExitCode = CliExitCodes.HardwareFailure,
-                    Message = "operation was cancelled",
+                    Code = CliErrorCodes.Timeout,
+                    ExitCode = CliExitCodes.Timeout,
+                    Message = timedOut
+                        ? $"operation timed out after {timeoutSeconds}s"
+                        : "operation was cancelled",
                 },
             });
-            return CliExitCodes.HardwareFailure;
+            return CliExitCodes.Timeout;
         }
         catch (Exception ex)
         {
@@ -135,31 +175,24 @@ public static class Program
                 Command = parseResult.CommandResult.Command.Name,
                 Error = new CliError
                 {
-                    Code = CliErrorCodes.HardwareFailure,
-                    ExitCode = CliExitCodes.HardwareFailure,
+                    Code = CliErrorCodes.InternalError,
+                    ExitCode = CliExitCodes.InternalError,
                     Message = $"unexpected error: {ex.Message}",
                 },
             });
-            return CliExitCodes.HardwareFailure;
+            return CliExitCodes.InternalError;
+        }
+        finally
+        {
+            timeoutTimer?.Dispose();
         }
     }
+
+    public static bool HasHelpToken(ParseResult parseResult)
+        => parseResult.UnmatchedTokens.Any(t => t is "--help" or "-h" or "-?" or "/?");
+
+    public static bool HasVersionToken(ParseResult parseResult)
+        => parseResult.UnmatchedTokens.Any(t => t == "--version");
 
     private static PowerDisplayRootCommand BuildRootCommand() => new();
-
-    private static bool HasHelpToken(ParseResult parseResult)
-    {
-        foreach (var token in parseResult.Tokens)
-        {
-            switch (token.Value)
-            {
-                case "--help":
-                case "-h":
-                case "-?":
-                case "/?":
-                    return true;
-            }
-        }
-
-        return false;
-    }
 }
