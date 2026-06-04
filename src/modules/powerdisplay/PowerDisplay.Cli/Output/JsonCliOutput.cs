@@ -16,16 +16,18 @@ public sealed class JsonCliOutput : ICliOutput
 {
     private readonly TextWriter _stdout;
     private readonly TextWriter _stderr;
+    private readonly bool _quiet;
 
-    public JsonCliOutput()
-        : this(Console.Out, Console.Error)
+    public JsonCliOutput(bool quiet = false)
+        : this(Console.Out, Console.Error, quiet)
     {
     }
 
-    public JsonCliOutput(TextWriter stdout, TextWriter stderr)
+    public JsonCliOutput(TextWriter stdout, TextWriter stderr, bool quiet = false)
     {
         _stdout = stdout;
         _stderr = stderr;
+        _quiet = quiet;
     }
 
     public void WriteListResult(CliListResult result)
@@ -43,5 +45,11 @@ public sealed class JsonCliOutput : ICliOutput
     public void WriteError(CliErrorResult result)
         => _stderr.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliErrorResult));
 
-    public void WriteWarning(string message) => _stderr.WriteLine(message);
+    public void WriteWarning(string message)
+    {
+        if (!_quiet)
+        {
+            _stderr.WriteLine(message);
+        }
+    }
 }

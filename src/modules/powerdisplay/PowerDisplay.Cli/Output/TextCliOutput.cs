@@ -16,16 +16,18 @@ public sealed class TextCliOutput : ICliOutput
 {
     private readonly TextWriter _stdout;
     private readonly TextWriter _stderr;
+    private readonly bool _quiet;
 
-    public TextCliOutput()
-        : this(Console.Out, Console.Error)
+    public TextCliOutput(bool quiet = false)
+        : this(Console.Out, Console.Error, quiet)
     {
     }
 
-    public TextCliOutput(TextWriter stdout, TextWriter stderr)
+    public TextCliOutput(TextWriter stdout, TextWriter stderr, bool quiet = false)
     {
         _stdout = stdout;
         _stderr = stderr;
+        _quiet = quiet;
     }
 
     public void WriteListResult(CliListResult result)
@@ -168,7 +170,13 @@ public sealed class TextCliOutput : ICliOutput
         }
     }
 
-    public void WriteWarning(string message) => _stderr.WriteLine(message);
+    public void WriteWarning(string message)
+    {
+        if (!_quiet)
+        {
+            _stderr.WriteLine(message);
+        }
+    }
 
     private static string Truncate(string s, int max)
     {
