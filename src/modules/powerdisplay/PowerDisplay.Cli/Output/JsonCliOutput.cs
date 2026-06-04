@@ -41,7 +41,7 @@ public sealed class JsonCliOutput : ICliOutput
         => _stdout.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliCapabilitiesResult));
 
     public void WriteError(CliErrorResult result)
-        => _stdout.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliErrorResult));
+        => _stderr.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliErrorResult));
 
     public void WriteWarning(string message) => _stderr.WriteLine(message);
 }
