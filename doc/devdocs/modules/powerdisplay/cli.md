@@ -3,10 +3,16 @@
 Headless command-line interface for PowerDisplay. Drives the same DDC/CI and WMI controllers the GUI uses, so any monitor the tray app can adjust is also reachable from a script or terminal.
 
 - **Binary**: `PowerToys.PowerDisplay.Cli.exe`
-- **Install location**: `C:\Program Files\PowerToys\modules\PowerDisplay\` (shipped alongside `PowerToys.PowerDisplay.exe`)
+- **Install location**: `C:\Program Files\PowerToys\WinUI3Apps\` (shipped alongside `PowerToys.PowerDisplay.exe`)
 - **Source**: [src/modules/powerdisplay/PowerDisplay.Cli/](../../../../src/modules/powerdisplay/PowerDisplay.Cli/)
 
 ## Commands at a glance
+
+> The binary ships as `PowerToys.PowerDisplay.Cli.exe` in `C:\Program Files\PowerToys\WinUI3Apps\` and is not added to `PATH`. Invoke it by full path, or define a shell alias. PowerShell example:
+> ```powershell
+> Set-Alias powerdisplay "C:\Program Files\PowerToys\WinUI3Apps\PowerToys.PowerDisplay.Cli.exe"
+> ```
+> The examples below assume such an alias.
 
 ```
 powerdisplay list
@@ -23,12 +29,12 @@ Every value-bearing subcommand picks the target monitor with one of two flags:
 
 | Flag | Alias | Type | Description |
 |---|---|---|---|
-| `--monitor-number` | `-n` | int | 1-based index, the same number shown by `list`. |
+| `--monitor-number` | `-n` | int | 1-based index, the same number shown by `list`. Requires an integer value; a non-integer is an `ARGUMENT_ERROR` (exit code `7`). |
 | `--monitor-id` | `-i` | string | Stable monitor ID (the Windows `DevicePath` with the trailing GUID stripped, e.g. `\\?\DISPLAY#DELD1A8#5&abc&0&UID12345`). Survives reboots and OS-level monitor reordering. |
 
 Precedence rules:
 
-- Neither flag → `get` and `capabilities` operate on **all** discovered monitors; `set` errors with exit code `6` (selector required).
+- Neither flag → `get` operates on **all** discovered monitors; `set` and `capabilities` error with exit code `6` (`SELECTOR_MISSING`).
 - Only `-n` → resolve by `MonitorNumber`.
 - Only `-i` → exact, case-insensitive match on `Monitor.Id`.
 - **Both** → `-i` wins. A warning is printed to stderr noting that `-n` was ignored.
@@ -106,6 +112,14 @@ Each accepts either the friendly name **or** the raw hex VCP value. Names are ca
 | `--power-state` | `On`, `Standby`, `Suspend`, `Off (DPM)`, `Off (Hard)` | `0x01`–`0x05` | `0xD6` |
 | `--orientation` | `0`, `90`, `180`, `270` (degrees) | n/a | not VCP — uses Windows `ChangeDisplaySettingsEx` |
 
+#### Power-off confirmation
+
+Applying a power-state that turns the display off (`Off (DPM)` or `Off (Hard)`) requires the `--confirm-power-off` flag. Without it the CLI refuses with exit code `7` (`ARGUMENT_ERROR`). If the monitor does not support power-state control at all, exit code `4` (`UNSUPPORTED_FEATURE`) is returned instead.
+
+```
+powerdisplay set -n 1 --power-state "Off (DPM)" --confirm-power-off
+```
+
 Examples:
 
 ```
@@ -120,7 +134,8 @@ If the value is unparseable or not advertised in the monitor's supported set, th
 
 ```
 $ powerdisplay set -n 1 --input-source PIZZA
-Error: --input-source value 'PIZZA' is not supported by Monitor 1 (Dell U2723QE)
+Error: --input-source value 'PIZZA' is not in the monitor's supported set
+  monitor: Monitor 1 (Dell U2723QE)
   supported: HDMI-1 (0x11), HDMI-2 (0x12), DisplayPort-1 (0x0F), USB-C (0x1B)
   hint: pass a name from the list above, or a raw hex value like 0x11
 ```
@@ -135,7 +150,7 @@ Error: Monitor 2 (Built-in display) does not support contrast adjustment
 
 ## `capabilities`
 
-Dump the parsed VCP capability set advertised by the monitor.
+Dump the parsed VCP capability set advertised by the monitor. A selector (`-n` or `-i`) is **required**; omitting it errors with exit code `6` (`SELECTOR_MISSING`).
 
 ```
 $ powerdisplay capabilities -n 1
@@ -155,9 +170,16 @@ Monitor 1 (Dell U2723QE) via DDC/CI
 
 | Flag | Effect |
 |---|---|
-| `--json` | Emit a stable JSON envelope instead of human-readable text. Goes on stdout; warnings and errors stay on stderr. |
+| `--json` | Emit a stable JSON envelope instead of human-readable text. Data goes to stdout; warnings and error envelopes go to **stderr**. |
 | `--help` / `-h` / `-?` | Print help for the (sub)command. |
 | `--version` | Print the CLI version. |
+| `--timeout <seconds>` | Abort the operation after N seconds (default 30; 0 disables). Useful for unresponsive DDC monitors. |
+| `--quiet` | Suppress warning messages on stderr. |
+| `--max-compatibility[=true\|false]` | Force max-compatibility discovery on/off, overriding the saved PowerDisplay setting. |
+
+## Settings honored
+
+The CLI reads the saved PowerDisplay `settings.json` on startup. It honors the **max-compatibility** toggle (overridable per-invocation via `--max-compatibility`) and **excludes monitors hidden** in the PowerDisplay settings, matching the GUI's visible monitor set.
 
 ## Exit codes
 
@@ -169,19 +191,22 @@ Monitor 1 (Dell U2723QE) via DDC/CI
 | 3 | `InvalidDiscreteValue` | Discrete value unparseable or not in the monitor's supported set. |
 | 4 | `UnsupportedFeature` | Monitor does not support this setting. |
 | 5 | `HardwareFailure` | DDC/CI or WMI write returned failure. |
-| 6 | `SelectorMissing` | `set` invoked without `-n`/`-i`. |
-| 7 | `ArgumentError` | `System.CommandLine` parse failure, missing/duplicated `--<setting>`, or unknown setting name. |
+| 6 | `SelectorMissing` | `set` or `capabilities` invoked without `-n`/`-i`. |
+| 7 | `ArgumentError` | `System.CommandLine` parse failure, missing/duplicated `--<setting>`, unknown setting name, or missing `--confirm-power-off` for a power-off state. |
+| 8 | `Timeout` | Operation timed out (`--timeout`) or was cancelled (Ctrl+C). |
+| 9 | `InternalError` | Unexpected internal error. |
 
 Scripts can branch on the exit code rather than parsing strings.
 
 ## JSON output
 
-The `--json` flag switches every command to a stable envelope. All keys are camelCase. `null`/missing fields are omitted.
+The `--json` flag switches every command to a stable envelope. All keys are camelCase. `null`/missing fields are omitted. Data is written to **stdout**; warnings and error envelopes are written to **stderr**.
 
 ### Success — `set`
 
 ```json
 {
+  "version": "1.0",
   "ok": true,
   "command": "set",
   "monitor": {
@@ -200,8 +225,11 @@ The `--json` flag switches every command to a stable envelope. All keys are came
 
 ### Success — `get` (single or all monitors share this shape)
 
+The `orientation` setting's `raw` value is in **degrees** (0, 90, 180, or 270), matching the values accepted by `set --orientation`. This allows round-tripping: read the raw value and pass it back to `set --orientation` unchanged.
+
 ```json
 {
+  "version": "1.0",
   "ok": true,
   "command": "get",
   "monitors": [
@@ -210,7 +238,8 @@ The `--json` flag switches every command to a stable envelope. All keys are came
       "settings": [
         { "setting": "brightness", "raw": 30, "display": "30%", "supported": true },
         { "setting": "contrast",   "raw": 50, "display": "50%", "supported": true },
-        { "setting": "input-source", "raw": 17, "display": "HDMI-1 (0x11)", "supported": true }
+        { "setting": "input-source", "raw": 17, "display": "HDMI-1 (0x11)", "supported": true },
+        { "setting": "orientation", "raw": 90, "display": "90°", "supported": true }
       ]
     }
   ]
@@ -221,6 +250,7 @@ The `--json` flag switches every command to a stable envelope. All keys are came
 
 ```json
 {
+  "version": "1.0",
   "ok": true,
   "command": "list",
   "monitors": [
@@ -234,23 +264,45 @@ The `--json` flag switches every command to a stable envelope. All keys are came
       "supportsVolume": false,
       "supportsColorTemperature": true,
       "supportsInputSource": true,
-      "supportsPowerState": true
+      "supportsPowerState": true,
+      "supportsOrientation": true
     }
+  ]
+}
+```
+
+### Success — `capabilities`
+
+```json
+{
+  "version": "1.0",
+  "ok": true,
+  "command": "capabilities",
+  "monitor": { "number": 1, "id": "...", "name": "Dell U2723QE", "method": "DDC/CI" },
+  "mccs": "2.2",
+  "model": "U2723QE",
+  "vcpCodes": [
+    { "code": "0x10", "name": "Brightness", "type": "continuous" },
+    { "code": "0x60", "name": "Input Source", "type": "discrete",
+      "values": [{ "name": "HDMI-1", "vcp": "0x11" }, { "name": "DisplayPort-1", "vcp": "0x0F" }] }
   ]
 }
 ```
 
 ### Error
 
+Error envelopes are written to **stderr** (not stdout).
+
 ```json
 {
+  "version": "1.0",
   "ok": false,
   "command": "set",
   "monitor": { "number": 1, "id": "...", "name": "Dell U2723QE", "method": "DDC/CI" },
   "error": {
     "code": "INVALID_DISCRETE_VALUE",
     "exitCode": 3,
-    "message": "--input-source value 'PIZZA' is not supported by Monitor 1 (Dell U2723QE)",
+    "message": "--input-source value 'PIZZA' is not in the monitor's supported set",
     "setting": "input-source",
     "requested": "PIZZA",
     "supported": [
@@ -264,11 +316,11 @@ The `--json` flag switches every command to a stable envelope. All keys are came
 }
 ```
 
-Error codes (the `error.code` string): `MONITOR_NOT_FOUND`, `OUT_OF_RANGE`, `INVALID_DISCRETE_VALUE`, `UNSUPPORTED_FEATURE`, `HARDWARE_FAILURE`, `SELECTOR_MISSING`, `ARGUMENT_ERROR`.
+Error codes (the `error.code` string): `MONITOR_NOT_FOUND`, `OUT_OF_RANGE`, `INVALID_DISCRETE_VALUE`, `UNSUPPORTED_FEATURE`, `HARDWARE_FAILURE`, `SELECTOR_MISSING`, `ARGUMENT_ERROR`, `TIMEOUT`, `INTERNAL_ERROR`.
 
 ## Logging
 
-Beyond stdout/stderr, the CLI writes a rotating log to `%LOCALAPPDATA%\Microsoft\PowerToys\PowerDisplay\Logs\` via `ManagedCommon.Logger`. This is shared with the GUI module, so DDC/CI errors surfaced by the controllers are recoverable post-mortem.
+Beyond stdout/stderr, the CLI writes a rotating log to `%LOCALAPPDATA%\Microsoft\PowerToys\PowerDisplay\Logs\<version>\` via `ManagedCommon.Logger`. This is shared with the GUI module, so DDC/CI errors surfaced by the controllers are recoverable post-mortem.
 
 ## Scripting recipes
 
