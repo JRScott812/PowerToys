@@ -78,11 +78,19 @@ public static class Program
             Console.CancelKeyPress += (_, e) =>
             {
                 e.Cancel = true;
-                cts.Cancel();
+                try
+                {
+                    cts.Cancel();
+                }
+                catch (ObjectDisposedException)
+                {
+                }
             };
 
             if (timeoutSeconds > 0)
             {
+                // `timedOut` is set on the timer thread before cts.Cancel(); the cancel→token
+                // propagation establishes happens-before, so the catch below reads it reliably.
                 timeoutTimer = new Timer(
                     _ =>
                     {
