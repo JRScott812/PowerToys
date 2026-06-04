@@ -86,6 +86,7 @@ public static class SetCommand
                 brightness,
                 monitor.SupportsBrightness,
                 monitor.CurrentBrightness,
+                monitor.ReadValues.HasFlag(MonitorReadFlags.Brightness),
                 "internal panels and external monitors via DDC/CI",
                 (mm, id, v, ct) => mm.SetBrightnessAsync(id, v, ct),
                 output,
@@ -102,6 +103,7 @@ public static class SetCommand
                 contrast,
                 monitor.SupportsContrast,
                 monitor.CurrentContrast,
+                monitor.ReadValues.HasFlag(MonitorReadFlags.Contrast),
                 "internal panel exposes only brightness via WmiMonitorBrightness; DDC/CI capabilities are not available",
                 (mm, id, v, ct) => mm.SetContrastAsync(id, v, ct),
                 output,
@@ -118,6 +120,7 @@ public static class SetCommand
                 volume,
                 monitor.SupportsVolume,
                 monitor.CurrentVolume,
+                monitor.ReadValues.HasFlag(MonitorReadFlags.Volume),
                 "monitor's VCP capabilities did not advertise audio speaker volume (0x62)",
                 (mm, id, v, ct) => mm.SetVolumeAsync(id, v, ct),
                 output,
@@ -135,6 +138,7 @@ public static class SetCommand
                 colorTemp,
                 monitor.SupportsColorTemperature,
                 monitor.CurrentColorTemperature,
+                monitor.ReadValues.HasFlag(MonitorReadFlags.ColorTemperature),
                 monitor.VcpCapabilitiesInfo?.GetSupportedValues(0x14),
                 "monitor's VCP capabilities did not advertise color preset (0x14)",
                 (mm, id, v, ct) => mm.SetColorTemperatureAsync(id, v, ct),
@@ -153,6 +157,7 @@ public static class SetCommand
                 inputSource,
                 monitor.SupportsInputSource,
                 monitor.CurrentInputSource,
+                monitor.ReadValues.HasFlag(MonitorReadFlags.InputSource),
                 monitor.SupportedInputSources,
                 "monitor's VCP capabilities did not advertise input source (0x60)",
                 (mm, id, v, ct) => mm.SetInputSourceAsync(id, v, ct),
@@ -171,11 +176,14 @@ public static class SetCommand
                 powerState,
                 monitor.SupportsPowerState,
                 monitor.CurrentPowerState,
+                monitor.ReadValues.HasFlag(MonitorReadFlags.PowerState),
                 monitor.SupportedPowerStates,
                 "monitor's VCP capabilities did not advertise power mode (0xD6)",
                 (mm, id, v, ct) => mm.SetPowerStateAsync(id, v, ct),
                 output,
-                cancellationToken);
+                cancellationToken,
+                requireConfirmation: !inputs.ConfirmPowerOff && IsPowerOff(powerState),
+                confirmationSetting: "power-state");
         }
 
         if (inputs.Orientation is { } orientation)
@@ -236,6 +244,13 @@ public static class SetCommand
             : $"{name} (0x{value:X2})";
     }
 
+    // VCP 0xD6: 0x04 = Off (DPM), 0x05 = Off (Hard). Accepts the friendly name or hex.
+    internal static bool IsPowerOff(string raw)
+    {
+        var resolved = DiscreteValueResolver.TryResolve(0xD6, "power-state", raw, supportedValues: null, out _);
+        return resolved is 0x04 or 0x05;
+    }
+
     internal static string OrientationDegrees(int index) => index switch
     {
         0 => "0°",
@@ -262,6 +277,7 @@ public static class SetCommand
         int requested,
         bool supportsCheck,
         int beforeValue,
+        bool beforeKnown,
         string unsupportedReason,
         Func<IMonitorManager, string, int, CancellationToken, Task<MonitorOperationResult>> apply,
         ICliOutput output,
@@ -315,9 +331,9 @@ public static class SetCommand
         {
             Monitor = monitorRef,
             Setting = settingName,
-            BeforeRaw = beforeValue,
+            BeforeRaw = beforeKnown ? beforeValue : null,
             AfterRaw = requested,
-            BeforeDisplay = beforeValue + "%",
+            BeforeDisplay = beforeKnown ? beforeValue + "%" : null,
             AfterDisplay = requested + "%",
         });
         return CliExitCodes.Ok;
@@ -332,12 +348,34 @@ public static class SetCommand
         string raw,
         bool supportsCheck,
         int beforeValue,
+        bool beforeKnown,
         IReadOnlyList<int>? supportedValues,
         string unsupportedReason,
         Func<IMonitorManager, string, int, CancellationToken, Task<MonitorOperationResult>> apply,
         ICliOutput output,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool requireConfirmation = false,
+        string? confirmationSetting = null)
     {
+        if (requireConfirmation)
+        {
+            output.WriteError(new CliErrorResult
+            {
+                Command = "set",
+                Monitor = monitorRef,
+                Error = new CliError
+                {
+                    Code = CliErrorCodes.ArgumentError,
+                    ExitCode = CliExitCodes.ArgumentError,
+                    Setting = confirmationSetting,
+                    Requested = raw,
+                    Message = $"refusing to turn off Monitor {monitorRef.Number} ({monitorRef.Name}) without confirmation",
+                    Hint = "re-run with --confirm-power-off to power the display off",
+                },
+            });
+            return CliExitCodes.ArgumentError;
+        }
+
         if (!supportsCheck)
         {
             output.WriteError(new CliErrorResult
@@ -386,9 +424,9 @@ public static class SetCommand
         {
             Monitor = monitorRef,
             Setting = settingName,
-            BeforeRaw = beforeValue,
+            BeforeRaw = beforeKnown ? beforeValue : null,
             AfterRaw = resolved.Value,
-            BeforeDisplay = FormatDiscrete(vcpCode, beforeValue),
+            BeforeDisplay = beforeKnown ? FormatDiscrete(vcpCode, beforeValue) : null,
             AfterDisplay = FormatDiscrete(vcpCode, resolved.Value),
         });
         return CliExitCodes.Ok;
