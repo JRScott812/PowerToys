@@ -31,7 +31,7 @@ public static class Program
         // Help / version short-circuit through the default invocation pipeline (which owns
         // the version + help renderers). Done BEFORE the logger is created so a pure
         // --help/--version invocation has no file-system side effects.
-        if (parseResult.Tokens.Count == 0 || HasHelpToken(parseResult) || HasVersionToken(parseResult))
+        if (parseResult.Tokens.Count == 0 || HasHelpToken(parseResult) || IsVersionRequest(parseResult))
         {
             return await root.InvokeAsync(args);
         }
@@ -201,6 +201,9 @@ public static class Program
 
     public static bool HasVersionToken(ParseResult parseResult)
         => parseResult.UnmatchedTokens.Any(t => t == "--version");
+
+    public static bool IsVersionRequest(ParseResult parseResult)
+        => HasVersionToken(parseResult) && parseResult.CommandResult.Command is RootCommand;
 
     private static PowerDisplayRootCommand BuildRootCommand() => new();
 }

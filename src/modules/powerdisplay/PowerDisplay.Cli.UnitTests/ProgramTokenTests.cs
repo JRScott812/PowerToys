@@ -7,6 +7,7 @@ using System.CommandLine.Parsing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PowerDisplay.Cli;
 using PowerDisplay.Cli.Commands;
+using PowerDisplay.Cli.Options;
 
 namespace PowerDisplay.Cli.UnitTests;
 
@@ -39,4 +40,29 @@ public class ProgramTokenTests
     [TestMethod]
     public void VersionValueOfOption_IsNotTreatedAsVersion()
         => Assert.IsFalse(Program.HasVersionToken(Parse("set", "-i", "--version", "--brightness", "50")));
+
+    [TestMethod]
+    public void IsVersionRequest_BareVersion_True()
+        => Assert.IsTrue(Program.IsVersionRequest(Parse("--version")));
+
+    [TestMethod]
+    public void IsVersionRequest_VersionAfterSubcommand_False()
+        => Assert.IsFalse(Program.IsVersionRequest(Parse("set", "-n", "1", "--version")));
+
+    [TestMethod]
+    public void MaxCompatibility_BareFlag_ParsesTrue()
+        => Assert.AreEqual(true, Parse("--max-compatibility").GetValueForOption(CliOptions.MaxCompatibility));
+
+    [TestMethod]
+    public void MaxCompatibility_Absent_ParsesNull()
+        => Assert.IsNull(Parse("list").GetValueForOption(CliOptions.MaxCompatibility));
+
+    [TestMethod]
+    public void MaxCompatibility_ExplicitValue_ParsesThatValue()
+    {
+        // Verify an explicit value overrides; determine the accepted syntax that the
+        // pinned System.CommandLine 2.0.0-beta4 supports for a bool option value.
+        var result = Parse("--max-compatibility:false").GetValueForOption(CliOptions.MaxCompatibility);
+        Assert.AreEqual(false, result);
+    }
 }
