@@ -34,5 +34,6 @@
     <ProjectReference Include="..\PowerDisplay.Cli\PowerDisplay.Cli.csproj" />
     <ProjectReference Include="..\PowerDisplay.Lib\PowerDisplay.Lib.csproj" />
     <ProjectReference Include="..\PowerDisplay.Models\PowerDisplay.Models.csproj" />
+    <ProjectReference Include="..\..\..\settings-ui\Settings.UI.Library\Settings.UI.Library.csproj" />
   </ItemGroup>
 </Project>
