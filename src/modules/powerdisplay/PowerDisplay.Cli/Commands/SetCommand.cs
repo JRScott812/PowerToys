@@ -243,6 +243,15 @@ public static class SetCommand
         _ => $"index {index}",
     };
 
+    internal static int OrientationDegreesValue(int index) => index switch
+    {
+        0 => 0,
+        1 => 90,
+        2 => 180,
+        3 => 270,
+        _ => index,
+    };
+
     private static async Task<int> ApplyContinuousAsync(
         MonitorManager monitorManager,
         Monitor monitor,

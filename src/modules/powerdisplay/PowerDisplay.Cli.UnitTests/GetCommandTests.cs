@@ -124,6 +124,22 @@ public class GetCommandTests
     }
 
     [TestMethod]
+    public void EmitAll_OrientationRaw_IsDegreesNotIndex()
+    {
+        var m = Sample(1, "\\\\?\\DISPLAY#A", "Dell", "DDC/CI");
+        m.Orientation = 1; // index 1 == 90 degrees
+        var output = new CapturingOutput();
+
+        var exit = GetCommand.EmitAll(new List<Monitor> { m }, settingFilter: "orientation", output);
+
+        Assert.AreEqual(0, exit);
+        var setting = output.LastGetResult!.Monitors[0].Settings[0];
+        Assert.AreEqual("orientation", setting.Setting);
+        Assert.AreEqual(90, setting.Raw);   // degrees, not the index 1
+        Assert.AreEqual("90°", setting.Display);
+    }
+
+    [TestMethod]
     public void TextOutput_RendersProtocolAndIdHeader()
     {
         using var stdout = new StringWriter();

@@ -183,7 +183,7 @@ public static class GetCommand
         "orientation" => new CliSettingValue
         {
             Setting = "orientation",
-            Raw = monitor.Orientation,
+            Raw = SetCommand.OrientationDegreesValue(monitor.Orientation),
             Display = SetCommand.OrientationDegrees(monitor.Orientation),
             Supported = !string.IsNullOrEmpty(monitor.GdiDeviceName),
         },
