@@ -3,6 +3,9 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using PowerDisplay.Cli.Errors;
+using PowerDisplay.Cli.Output;
+using PowerDisplay.Cli.Resolution;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
 namespace PowerDisplay.Cli.Commands;
@@ -32,5 +35,34 @@ internal static class MonitorFiltering
         }
 
         return kept;
+    }
+
+    /// <summary>
+    /// Resolves the target monitor from the already-discovered, hidden-filtered list using the CLI
+    /// selector flags, emitting the selector warning and any error envelope. Returns the resolved
+    /// monitor, or <c>null</c> plus the exit code to return when resolution fails. Callers pass the
+    /// already-discovered list so discovery runs exactly once per invocation.
+    /// </summary>
+    public static (Monitor? Monitor, int ExitCode) ResolveSelected(
+        IReadOnlyList<Monitor> monitors,
+        int? monitorNumber,
+        string? monitorId,
+        string command,
+        ICliOutput output)
+    {
+        var resolution = MonitorResolver.Resolve(monitors, monitorNumber, monitorId);
+
+        if (resolution.Warning is not null)
+        {
+            output.WriteWarning(resolution.Warning);
+        }
+
+        if (resolution.Error is not null)
+        {
+            output.WriteError(new CliErrorResult { Command = command, Error = resolution.Error });
+            return (null, resolution.Error.ExitCode);
+        }
+
+        return (resolution.Monitor, CliExitCodes.Ok);
     }
 }

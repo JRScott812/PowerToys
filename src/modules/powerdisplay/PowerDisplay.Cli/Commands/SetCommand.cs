@@ -60,20 +60,13 @@ public static class SetCommand
 
         var monitors = await monitorManager.DiscoverMonitorsAsync(cancellationToken);
         monitors = MonitorFiltering.ExcludeHidden(monitors, hiddenMonitorIds);
-        var resolution = MonitorResolver.Resolve(monitors, inputs.MonitorNumber, inputs.MonitorId);
 
-        if (resolution.Warning is not null)
+        var (monitor, exit) = MonitorFiltering.ResolveSelected(monitors, inputs.MonitorNumber, inputs.MonitorId, "set", output);
+        if (monitor is null)
         {
-            output.WriteWarning(resolution.Warning);
+            return exit;
         }
 
-        if (resolution.Error is not null)
-        {
-            output.WriteError(new CliErrorResult { Command = "set", Error = resolution.Error });
-            return resolution.Error.ExitCode;
-        }
-
-        var monitor = resolution.Monitor!;
         var monitorRef = ToRef(monitor);
 
         if (inputs.Brightness is { } brightness)
@@ -285,20 +278,7 @@ public static class SetCommand
     {
         if (!supportsCheck)
         {
-            output.WriteError(new CliErrorResult
-            {
-                Command = "set",
-                Monitor = monitorRef,
-                Error = new CliError
-                {
-                    Code = CliErrorCodes.UnsupportedFeature,
-                    ExitCode = CliExitCodes.UnsupportedFeature,
-                    Setting = settingName,
-                    Message = $"Monitor {monitorRef.Number} ({monitorRef.Name}) does not support {settingName} adjustment",
-                    Hint = $"reason: {unsupportedReason}",
-                },
-            });
-            return CliExitCodes.UnsupportedFeature;
+            return WriteUnsupported(output, monitorRef, settingName, unsupportedReason);
         }
 
         var rangeError = ContinuousValueValidator.Validate(settingName, requested);
@@ -309,22 +289,15 @@ public static class SetCommand
         }
 
         var op = await apply(monitorManager, monitor.Id, requested, cancellationToken);
+
+        // A blocking write that overran --timeout (or Ctrl+C) cancels the token but cannot be
+        // interrupted mid-call; surface it as TIMEOUT rather than reporting a false success.
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!op.IsSuccess)
         {
-            output.WriteError(new CliErrorResult
-            {
-                Command = "set",
-                Monitor = monitorRef,
-                Error = new CliError
-                {
-                    Code = CliErrorCodes.HardwareFailure,
-                    ExitCode = CliExitCodes.HardwareFailure,
-                    Setting = settingName,
-                    Requested = requested.ToString(CultureInfo.InvariantCulture),
-                    Message = op.ErrorMessage ?? "Hardware write failed",
-                },
-            });
-            return CliExitCodes.HardwareFailure;
+            return WriteHardwareFailure(
+                output, monitorRef, settingName, requested.ToString(CultureInfo.InvariantCulture), op.ErrorMessage, "Hardware write failed");
         }
 
         output.WriteSetResult(new CliSetResult
@@ -359,20 +332,18 @@ public static class SetCommand
     {
         if (!supportsCheck)
         {
-            output.WriteError(new CliErrorResult
-            {
-                Command = "set",
-                Monitor = monitorRef,
-                Error = new CliError
-                {
-                    Code = CliErrorCodes.UnsupportedFeature,
-                    ExitCode = CliExitCodes.UnsupportedFeature,
-                    Setting = settingName,
-                    Message = $"Monitor {monitorRef.Number} ({monitorRef.Name}) does not support {settingName} adjustment",
-                    Hint = $"reason: {unsupportedReason}",
-                },
-            });
-            return CliExitCodes.UnsupportedFeature;
+            return WriteUnsupported(output, monitorRef, settingName, unsupportedReason);
+        }
+
+        // Resolve (and verify against the monitor's advertised set) BEFORE the power-off
+        // confirmation gate, so an off value the monitor never advertises reports the real
+        // INVALID_DISCRETE_VALUE (exit 3) instead of demanding --confirm-power-off for a value
+        // that could never be applied.
+        var resolved = DiscreteValueResolver.TryResolve(vcpCode, settingName, raw, supportedValues, out var valueError);
+        if (resolved is null)
+        {
+            output.WriteError(new CliErrorResult { Command = "set", Monitor = monitorRef, Error = valueError! });
+            return valueError!.ExitCode;
         }
 
         if (requireConfirmation)
@@ -394,30 +365,15 @@ public static class SetCommand
             return CliExitCodes.ArgumentError;
         }
 
-        var resolved = DiscreteValueResolver.TryResolve(vcpCode, settingName, raw, supportedValues, out var valueError);
-        if (resolved is null)
-        {
-            output.WriteError(new CliErrorResult { Command = "set", Monitor = monitorRef, Error = valueError! });
-            return valueError!.ExitCode;
-        }
-
         var op = await apply(monitorManager, monitor.Id, resolved.Value, cancellationToken);
+
+        // A blocking write that overran --timeout (or Ctrl+C) cancels the token but cannot be
+        // interrupted mid-call; surface it as TIMEOUT rather than reporting a false success.
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!op.IsSuccess)
         {
-            output.WriteError(new CliErrorResult
-            {
-                Command = "set",
-                Monitor = monitorRef,
-                Error = new CliError
-                {
-                    Code = CliErrorCodes.HardwareFailure,
-                    ExitCode = CliExitCodes.HardwareFailure,
-                    Setting = settingName,
-                    Requested = raw,
-                    Message = op.ErrorMessage ?? "Hardware write failed",
-                },
-            });
-            return CliExitCodes.HardwareFailure;
+            return WriteHardwareFailure(output, monitorRef, settingName, raw, op.ErrorMessage, "Hardware write failed");
         }
 
         output.WriteSetResult(new CliSetResult
@@ -465,38 +421,73 @@ public static class SetCommand
         }
 
         var beforeIndex = monitor.Orientation;
+        var beforeKnown = monitor.ReadValues.HasFlag(MonitorReadFlags.Orientation);
         var op = await monitorManager.SetRotationAsync(monitor.Id, index.Value, cancellationToken);
+
+        // A blocking rotation that overran --timeout (or Ctrl+C) cancels the token but cannot be
+        // interrupted mid-call; surface it as TIMEOUT rather than reporting a false success.
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!op.IsSuccess)
         {
-            output.WriteError(new CliErrorResult
-            {
-                Command = "set",
-                Monitor = monitorRef,
-                Error = new CliError
-                {
-                    Code = CliErrorCodes.HardwareFailure,
-                    ExitCode = CliExitCodes.HardwareFailure,
-                    Setting = OrientationResolver.SettingName,
-                    Requested = raw,
-                    Message = op.ErrorMessage ?? "ChangeDisplaySettingsEx failed",
-                },
-            });
-            return CliExitCodes.HardwareFailure;
+            return WriteHardwareFailure(
+                output, monitorRef, OrientationResolver.SettingName, raw, op.ErrorMessage, "ChangeDisplaySettingsEx failed");
         }
 
         output.WriteSetResult(new CliSetResult
         {
             Monitor = monitorRef,
             Setting = OrientationResolver.SettingName,
-            BeforeRaw = OrientationDegreesValue(beforeIndex),
+            BeforeRaw = beforeKnown ? OrientationDegreesValue(beforeIndex) : null,
             AfterRaw = OrientationDegreesValue(index.Value),
-            BeforeDisplay = OrientationDegrees(beforeIndex),
+            BeforeDisplay = beforeKnown ? OrientationDegrees(beforeIndex) : null,
             AfterDisplay = OrientationDegrees(index.Value),
         });
         return CliExitCodes.Ok;
     }
 
-    private static CliMonitorRef ToRef(Monitor m) => new()
+    // UNSUPPORTED_FEATURE envelope shared by the continuous and discrete set paths.
+    private static int WriteUnsupported(ICliOutput output, CliMonitorRef monitorRef, string settingName, string unsupportedReason)
+    {
+        output.WriteError(new CliErrorResult
+        {
+            Command = "set",
+            Monitor = monitorRef,
+            Error = new CliError
+            {
+                Code = CliErrorCodes.UnsupportedFeature,
+                ExitCode = CliExitCodes.UnsupportedFeature,
+                Setting = settingName,
+                Message = $"Monitor {monitorRef.Number} ({monitorRef.Name}) does not support {settingName} adjustment",
+                Hint = $"reason: {unsupportedReason}",
+            },
+        });
+        return CliExitCodes.UnsupportedFeature;
+    }
+
+    // HARDWARE_FAILURE envelope shared by the continuous, discrete, and orientation set paths.
+    private static int WriteHardwareFailure(
+        ICliOutput output, CliMonitorRef monitorRef, string settingName, string requested, string? errorMessage, string fallback)
+    {
+        output.WriteError(new CliErrorResult
+        {
+            Command = "set",
+            Monitor = monitorRef,
+            Error = new CliError
+            {
+                Code = CliErrorCodes.HardwareFailure,
+                ExitCode = CliExitCodes.HardwareFailure,
+                Setting = settingName,
+                Requested = requested,
+                Message = errorMessage ?? fallback,
+            },
+        });
+        return CliExitCodes.HardwareFailure;
+    }
+
+    // Shared Monitor -> CliMonitorRef projection (also called by GetCommand/CapabilitiesCommand,
+    // mirroring the existing cross-command reuse of FormatDiscrete/OrientationDegrees).
+    internal static CliMonitorRef ToRef(Monitor m) => new()
     {
         Number = m.MonitorNumber,
         Id = m.Id,

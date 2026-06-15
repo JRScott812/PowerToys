@@ -2,14 +2,11 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
-using PowerDisplay.Cli.Resolution;
-using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
@@ -52,21 +49,13 @@ public static class GetCommand
             return EmitAll(monitors, settingFilter, output);
         }
 
-        var resolution = MonitorResolver.Resolve(monitors, monitorNumber, monitorId);
-
-        if (resolution.Warning is not null)
+        var (monitor, exit) = MonitorFiltering.ResolveSelected(monitors, monitorNumber, monitorId, "get", output);
+        if (monitor is null)
         {
-            output.WriteWarning(resolution.Warning);
+            return exit;
         }
 
-        if (resolution.Error is not null)
-        {
-            output.WriteError(new CliErrorResult { Command = "get", Error = resolution.Error });
-            return resolution.Error.ExitCode;
-        }
-
-        var monitor = resolution.Monitor!;
-        var monitorRef = ToRef(monitor);
+        var monitorRef = SetCommand.ToRef(monitor);
 
         var entry = BuildEntry(monitor, monitorRef, settingFilter, out var settingError);
         if (settingError is not null)
@@ -84,7 +73,7 @@ public static class GetCommand
         var entries = new List<CliGetMonitorEntry>(monitors.Count);
         foreach (var monitor in monitors)
         {
-            var monitorRef = ToRef(monitor);
+            var monitorRef = SetCommand.ToRef(monitor);
             var entry = BuildEntry(monitor, monitorRef, settingFilter, out var settingError);
             if (settingError is not null)
             {
@@ -190,13 +179,5 @@ public static class GetCommand
             Supported = !string.IsNullOrEmpty(monitor.GdiDeviceName),
         },
         _ => null,
-    };
-
-    private static CliMonitorRef ToRef(Monitor m) => new()
-    {
-        Number = m.MonitorNumber,
-        Id = m.Id,
-        Name = m.Name,
-        Method = m.CommunicationMethod,
     };
 }

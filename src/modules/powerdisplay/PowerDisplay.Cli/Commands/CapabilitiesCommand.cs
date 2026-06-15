@@ -7,10 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
-using PowerDisplay.Cli.Resolution;
-using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
-using Monitor = PowerDisplay.Common.Models.Monitor;
 
 namespace PowerDisplay.Cli.Commands;
 
@@ -26,20 +23,13 @@ public static class CapabilitiesCommand
     {
         var monitors = await monitorManager.DiscoverMonitorsAsync(cancellationToken);
         monitors = MonitorFiltering.ExcludeHidden(monitors, hiddenMonitorIds);
-        var resolution = MonitorResolver.Resolve(monitors, monitorNumber, monitorId);
 
-        if (resolution.Warning is not null)
+        var (monitor, exit) = MonitorFiltering.ResolveSelected(monitors, monitorNumber, monitorId, "capabilities", output);
+        if (monitor is null)
         {
-            output.WriteWarning(resolution.Warning);
+            return exit;
         }
 
-        if (resolution.Error is not null)
-        {
-            output.WriteError(new CliErrorResult { Command = "capabilities", Error = resolution.Error });
-            return resolution.Error.ExitCode;
-        }
-
-        var monitor = resolution.Monitor!;
         var caps = monitor.VcpCapabilitiesInfo;
         var vcpCodes = new List<CliVcpCodeInfo>();
 
@@ -53,8 +43,7 @@ public static class CapabilitiesCommand
                     discreteValues = new List<string>(code.SupportedValues.Count);
                     foreach (var v in code.SupportedValues)
                     {
-                        var name = Common.Utils.VcpNames.GetValueName(code.Code, v);
-                        discreteValues.Add(name is null ? $"0x{v:X2}" : $"{name} (0x{v:X2})");
+                        discreteValues.Add(SetCommand.FormatDiscrete(code.Code, v));
                     }
                 }
 
@@ -70,7 +59,7 @@ public static class CapabilitiesCommand
 
         output.WriteCapabilitiesResult(new CliCapabilitiesResult
         {
-            Monitor = ToRef(monitor),
+            Monitor = SetCommand.ToRef(monitor),
             CommunicationMethod = monitor.CommunicationMethod,
             RawCapabilities = monitor.CapabilitiesRaw,
             Model = caps?.Model,
@@ -80,12 +69,4 @@ public static class CapabilitiesCommand
 
         return CliExitCodes.Ok;
     }
-
-    private static CliMonitorRef ToRef(Monitor m) => new()
-    {
-        Number = m.MonitorNumber,
-        Id = m.Id,
-        Name = m.Name,
-        Method = m.CommunicationMethod,
-    };
 }

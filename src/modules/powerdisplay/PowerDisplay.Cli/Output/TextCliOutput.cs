@@ -4,7 +4,7 @@
 
 using System;
 using System.IO;
-using System.Text;
+using System.Linq;
 
 namespace PowerDisplay.Cli.Output;
 
@@ -52,7 +52,7 @@ public sealed class TextCliOutput : ICliOutput
             ? string.Empty
             : $" [{result.Monitor.Method}]";
         var monitor = $"Monitor {result.Monitor.Number} ({result.Monitor.Name}){via}";
-        var before = result.BeforeDisplay is null ? "?" : result.BeforeDisplay;
+        var before = result.BeforeDisplay ?? "?";
         _stdout.WriteLine($"{monitor}: {result.Setting} {before} → {result.AfterDisplay}");
     }
 
@@ -133,9 +133,7 @@ public sealed class TextCliOutput : ICliOutput
 
     public void WriteError(CliErrorResult result)
     {
-        var sb = new StringBuilder();
-        sb.Append("Error: ").Append(result.Error.Message);
-        _stderr.WriteLine(sb.ToString());
+        _stderr.WriteLine($"Error: {result.Error.Message}");
 
         if (result.Monitor is { Number: > 0 })
         {
@@ -149,19 +147,7 @@ public sealed class TextCliOutput : ICliOutput
 
         if (result.Error.Supported is { Count: > 0 })
         {
-            var sb2 = new StringBuilder("  supported: ");
-            for (int i = 0; i < result.Error.Supported.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sb2.Append(", ");
-                }
-
-                var v = result.Error.Supported[i];
-                sb2.Append(v.Name).Append(' ').Append('(').Append(v.Vcp).Append(')');
-            }
-
-            _stderr.WriteLine(sb2.ToString());
+            _stderr.WriteLine("  supported: " + string.Join(", ", result.Error.Supported.Select(v => $"{v.Name} ({v.Vcp})")));
         }
 
         if (!string.IsNullOrEmpty(result.Error.Hint))

@@ -7,6 +7,7 @@ using System.CommandLine.Parsing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PowerDisplay.Cli;
 using PowerDisplay.Cli.Commands;
+using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Options;
 
 namespace PowerDisplay.Cli.UnitTests;
@@ -64,5 +65,28 @@ public class ProgramTokenTests
         // pinned System.CommandLine 2.0.0-beta4 supports for a bool option value.
         var result = Parse("--max-compatibility:false").GetValueForOption(CliOptions.MaxCompatibility);
         Assert.AreEqual(false, result);
+    }
+
+    [TestMethod]
+    public void BuildParseErrorResult_CollapsesMultipleMessagesIntoOneEnvelope()
+    {
+        // System.CommandLine can report several errors for one bad invocation; they must be
+        // collapsed into a single envelope so --json stays one parseable object.
+        var messages = new[] { "first problem", "second problem" };
+        var result = Program.BuildParseErrorResult("set", messages);
+
+        Assert.AreEqual("set", result.Command);
+        Assert.AreEqual(CliErrorCodes.ArgumentError, result.Error.Code);
+        Assert.AreEqual(CliExitCodes.ArgumentError, result.Error.ExitCode);
+        StringAssert.Contains(result.Error.Message, "first problem");
+        StringAssert.Contains(result.Error.Message, "second problem");
+    }
+
+    [TestMethod]
+    public void BuildParseErrorResult_EmptyMessages_FallsBackToGenericMessage()
+    {
+        var blanks = new[] { string.Empty, "  " };
+        var result = Program.BuildParseErrorResult("get", blanks);
+        Assert.AreEqual("invalid arguments", result.Error.Message);
     }
 }

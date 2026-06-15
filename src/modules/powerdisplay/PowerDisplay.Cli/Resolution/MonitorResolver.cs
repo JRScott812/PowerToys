@@ -58,6 +58,9 @@ public static class MonitorResolver
 
             return new MonitorResolution
             {
+                // Carry the "-n ignored" warning even on the not-found path: both selectors were
+                // supplied, so the spec's note that --monitor-number was ignored still applies.
+                Warning = warning,
                 Error = new CliError
                 {
                     Code = CliErrorCodes.MonitorNotFound,

@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Common.Utils;
 
@@ -46,7 +47,7 @@ public static class DiscreteValueResolver
         // If it does not (set is null/empty), the VCP code is treated as supporting any
         // value the user can specify (the controller-level write will surface a
         // HARDWARE_FAILURE if the device rejects the value).
-        if (supportedValues is { Count: > 0 } && !Contains(supportedValues, parsedValue.Value))
+        if (supportedValues is { Count: > 0 } && !supportedValues.Contains(parsedValue.Value))
         {
             error = MakeUnsupportedError(settingName, raw, supportedValues, vcpCode);
             return null;
@@ -83,19 +84,6 @@ public static class DiscreteValueResolver
         }
 
         return null;
-    }
-
-    private static bool Contains(IReadOnlyList<int> values, int needle)
-    {
-        for (int i = 0; i < values.Count; i++)
-        {
-            if (values[i] == needle)
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private static CliError MakeParseError(

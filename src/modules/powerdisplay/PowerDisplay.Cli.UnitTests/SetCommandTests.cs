@@ -2,6 +2,7 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,6 +29,8 @@ public class SetCommandTests
 
         public CliErrorResult? Error { get; private set; }
 
+        public string? Warning { get; private set; }
+
         public void WriteListResult(CliListResult result)
         {
         }
@@ -44,9 +47,7 @@ public class SetCommandTests
 
         public void WriteError(CliErrorResult result) => Error = result;
 
-        public void WriteWarning(string message)
-        {
-        }
+        public void WriteWarning(string message) => Warning = message;
     }
 
     private static Monitor BrightnessMonitor(MonitorReadFlags read = MonitorReadFlags.Brightness)
@@ -61,10 +62,10 @@ public class SetCommandTests
             ReadValues = read,
         };
 
-    private static Monitor PowerStateMonitor()
+    private static Monitor PowerStateMonitor(int[]? supportedValues = null)
     {
         var caps = new VcpCapabilities();
-        caps.SupportedVcpCodes[0xD6] = new VcpCodeInfo(0xD6, "Power Mode", PowerStateSupportedValues);
+        caps.SupportedVcpCodes[0xD6] = new VcpCodeInfo(0xD6, "Power Mode", supportedValues ?? PowerStateSupportedValues);
         return new Monitor
         {
             MonitorNumber = 1,
@@ -76,6 +77,18 @@ public class SetCommandTests
             ReadValues = MonitorReadFlags.PowerState,
         };
     }
+
+    private static Monitor OrientationMonitor(MonitorReadFlags read = MonitorReadFlags.Orientation, int orientation = 1)
+        => new()
+        {
+            MonitorNumber = 1,
+            Id = "MON-1",
+            Name = "Dell",
+            CommunicationMethod = "DDC/CI",
+            GdiDeviceName = @"\\.\DISPLAY1",
+            Orientation = orientation,
+            ReadValues = read,
+        };
 
     [TestMethod]
     public async Task Set_Brightness_Success_ReportsBeforeAfter()
@@ -236,5 +249,132 @@ public class SetCommandTests
         Assert.IsNull(output.Set!.BeforeRaw);
         Assert.IsNull(output.Set.BeforeDisplay);
         Assert.AreEqual(0x01, output.Set.AfterRaw);
+    }
+
+    [TestMethod]
+    public async Task Set_Orientation_Success_ReportsBeforeAfterDegrees()
+    {
+        var mm = new FakeMonitorManager(OrientationMonitor(orientation: 1)); // currently 90°
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, Orientation = "180" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(90, output.Set!.BeforeRaw);
+        Assert.AreEqual("90°", output.Set.BeforeDisplay);
+        Assert.AreEqual(180, output.Set.AfterRaw);
+        Assert.AreEqual("180°", output.Set.AfterDisplay);
+        Assert.AreEqual(("orientation", "MON-1", 2), mm.Writes[0]); // 180° == rotation index 2
+    }
+
+    [TestMethod]
+    public async Task Set_Orientation_ReadUnknown_OmitsBefore()
+    {
+        // GdiDeviceName present (rotation possible) but the live orientation was never read.
+        var mm = new FakeMonitorManager(OrientationMonitor(MonitorReadFlags.None, orientation: 0));
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, Orientation = "90" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.IsNull(output.Set!.BeforeRaw);
+        Assert.IsNull(output.Set.BeforeDisplay);
+        Assert.AreEqual(90, output.Set.AfterRaw);
+    }
+
+    [TestMethod]
+    public async Task Set_TimedOutWrite_SurfacesCancellation_NotFalseSuccess()
+    {
+        // Models a write that overran --timeout: the token is cancelled but the (fake) hardware
+        // write still returns success. The command must surface cancellation, not a false success.
+        var mm = new FakeMonitorManager(BrightnessMonitor());
+        var output = new CapturingOutput();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var cancelled = false;
+        try
+        {
+            await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, Brightness = 50 }, output, cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            cancelled = true;
+        }
+
+        Assert.IsTrue(cancelled, "a write that overran the deadline must surface cancellation");
+        Assert.IsNull(output.Set); // no success envelope emitted
+    }
+
+    [TestMethod]
+    public async Task Set_PowerOff_NotInSupportedSet_ReturnsInvalidDiscrete_NotConfirmation()
+    {
+        // Monitor advertises VCP 0xD6 but only the On (0x01) value — Off (DPM)/0x04 is unsupported.
+        // The value check must run BEFORE the confirmation gate, so the user gets the real exit 3
+        // instead of being asked to --confirm-power-off for a value the monitor can never accept.
+        var onlyOn = new[] { 0x01 };
+        var mm = new FakeMonitorManager(PowerStateMonitor(onlyOn));
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, PowerState = "0x04" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.InvalidDiscreteValue, exit);
+        Assert.AreEqual(CliErrorCodes.InvalidDiscreteValue, output.Error!.Error.Code);
+        Assert.AreEqual(0, mm.Writes.Count);
+    }
+
+    [TestMethod]
+    public async Task Set_MultipleSettings_ReturnsArgumentError_NoWrite()
+    {
+        var mm = new FakeMonitorManager(BrightnessMonitor());
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, Brightness = 50, Contrast = 70 }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.ArgumentError, exit);
+        Assert.AreEqual(0, mm.Writes.Count);
+    }
+
+    [TestMethod]
+    public async Task Set_Contrast_OnBrightnessOnlyMonitor_ReturnsUnsupportedFeature()
+    {
+        var mm = new FakeMonitorManager(BrightnessMonitor()); // advertises only Brightness
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, Contrast = 50 }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.UnsupportedFeature, exit);
+        StringAssert.Contains(output.Error!.Error.Message, "contrast");
+        Assert.AreEqual(0, mm.Writes.Count);
+    }
+
+    [TestMethod]
+    public async Task Set_BothSelectors_IdWins_EmitsWarning()
+    {
+        var nMon = BrightnessMonitor(); // number 1, id MON-1
+        var idMon = new Monitor
+        {
+            MonitorNumber = 2,
+            Id = "MON-2",
+            Name = "Internal",
+            CommunicationMethod = "DDC/CI",
+            CurrentBrightness = 40,
+            Capabilities = MonitorCapabilities.Brightness,
+            ReadValues = MonitorReadFlags.Brightness,
+        };
+        var mm = new FakeMonitorManager(nMon, idMon);
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(
+            mm,
+            NoHidden,
+            new SetCommandInputs { MonitorNumber = 1, MonitorId = "MON-2", Brightness = 55 },
+            output,
+            CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(("brightness", "MON-2", 55), mm.Writes[0]); // -i target, not -n
+        Assert.IsNotNull(output.Warning);
+        StringAssert.Contains(output.Warning!, "ignored");
     }
 }

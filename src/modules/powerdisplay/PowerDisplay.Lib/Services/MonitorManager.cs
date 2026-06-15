@@ -113,6 +113,12 @@ namespace PowerDisplay.Common.Services
                     _monitorLookup[monitor.Id] = monitor;
                 }
 
+                // Controllers leave Orientation at its default (0) during discovery; query the
+                // live rotation here so the very first read reflects the panel's real orientation
+                // (the CLI relies on this for `get`/`set --orientation` round-tripping, and the GUI
+                // shows the correct value on initial load).
+                RefreshAllOrientations();
+
                 return _monitors.AsReadOnly();
             }
             finally
@@ -357,9 +363,13 @@ namespace PowerDisplay.Common.Services
                 }
 
                 var currentOrientation = _rotationService.GetCurrentOrientation(monitor.GdiDeviceName);
-                if (currentOrientation >= 0 && currentOrientation != monitor.Orientation)
+                if (currentOrientation >= 0)
                 {
+                    // Assigning an unchanged value is a no-op (the setter guards on equality), but the
+                    // read flag must be set whenever the query succeeds so consumers can tell a real
+                    // "0°/landscape" reading apart from the never-read default.
                     monitor.Orientation = currentOrientation;
+                    monitor.ReadValues |= MonitorReadFlags.Orientation;
                 }
             }
         }

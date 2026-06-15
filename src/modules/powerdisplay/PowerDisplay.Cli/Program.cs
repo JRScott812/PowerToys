@@ -3,9 +3,12 @@
 // See the LICENSE file in the project root for more information.
 
 using System;
+using System.Collections.Generic;
 using System.CommandLine;
 using System.CommandLine.Parsing;
+using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ManagedCommon;
@@ -24,6 +27,10 @@ public static class Program
 
     public static async Task<int> Main(string[] args)
     {
+        // Emit UTF-8 so non-ASCII glyphs in human-readable output (the → arrow, ° degree sign,
+        // … ellipsis) and any UTF-8 JSON render correctly instead of as '?' on legacy code pages.
+        TrySetUtf8Output();
+
         var root = BuildRootCommand();
         var parser = new Parser(root);
         var parseResult = parser.Parse(args);
@@ -42,19 +49,12 @@ public static class Program
 
         if (parseResult.Errors.Count > 0)
         {
-            foreach (var err in parseResult.Errors)
-            {
-                output.WriteError(new CliErrorResult
-                {
-                    Command = parseResult.CommandResult.Command.Name,
-                    Error = new CliError
-                    {
-                        Code = CliErrorCodes.ArgumentError,
-                        ExitCode = CliExitCodes.ArgumentError,
-                        Message = err.Message,
-                    },
-                });
-            }
+            // System.CommandLine can report several parse errors for one bad invocation; collapse
+            // them into a single envelope so --json consumers always receive exactly one parseable
+            // object (and text consumers a single Error line) instead of N concatenated ones.
+            output.WriteError(BuildParseErrorResult(
+                parseResult.CommandResult.Command.Name,
+                parseResult.Errors.Select(e => e.Message)));
 
             return CliExitCodes.ArgumentError;
         }
@@ -110,69 +110,84 @@ public static class Program
 
             var command = parseResult.CommandResult.Command;
 
-            if (command == root.ListCommand)
+            Task<int> DispatchAsync()
             {
-                return await ListCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, output, cts.Token);
-            }
-
-            if (command == root.CapabilitiesCommand)
-            {
-                return await CapabilitiesCommand.RunAsync(
-                    monitorManager,
-                    runtime.HiddenMonitorIds,
-                    parseResult.GetValueForOption(CliOptions.MonitorNumber),
-                    parseResult.GetValueForOption(CliOptions.MonitorId),
-                    output,
-                    cts.Token);
-            }
-
-            if (command == root.GetCommand)
-            {
-                return await GetCommand.RunAsync(
-                    monitorManager,
-                    runtime.HiddenMonitorIds,
-                    parseResult.GetValueForOption(CliOptions.MonitorNumber),
-                    parseResult.GetValueForOption(CliOptions.MonitorId),
-                    parseResult.GetValueForOption(CliOptions.SettingFilter),
-                    output,
-                    cts.Token);
-            }
-
-            if (command == root.SetCommand)
-            {
-                var inputs = new SetCommandInputs
+                if (command == root.ListCommand)
                 {
-                    MonitorNumber = parseResult.GetValueForOption(CliOptions.MonitorNumber),
-                    MonitorId = parseResult.GetValueForOption(CliOptions.MonitorId),
-                    Brightness = parseResult.GetValueForOption(CliOptions.Brightness),
-                    Contrast = parseResult.GetValueForOption(CliOptions.Contrast),
-                    Volume = parseResult.GetValueForOption(CliOptions.Volume),
-                    ColorTemperature = parseResult.GetValueForOption(CliOptions.ColorTemperature),
-                    InputSource = parseResult.GetValueForOption(CliOptions.InputSource),
-                    PowerState = parseResult.GetValueForOption(CliOptions.PowerState),
-                    Orientation = parseResult.GetValueForOption(CliOptions.Orientation),
-                    ConfirmPowerOff = parseResult.GetValueForOption(CliOptions.ConfirmPowerOff),
-                };
+                    return ListCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, output, cts.Token);
+                }
 
-                return await SetCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, inputs, output, cts.Token);
+                if (command == root.CapabilitiesCommand)
+                {
+                    return CapabilitiesCommand.RunAsync(
+                        monitorManager,
+                        runtime.HiddenMonitorIds,
+                        parseResult.GetValueForOption(CliOptions.MonitorNumber),
+                        parseResult.GetValueForOption(CliOptions.MonitorId),
+                        output,
+                        cts.Token);
+                }
+
+                if (command == root.GetCommand)
+                {
+                    return GetCommand.RunAsync(
+                        monitorManager,
+                        runtime.HiddenMonitorIds,
+                        parseResult.GetValueForOption(CliOptions.MonitorNumber),
+                        parseResult.GetValueForOption(CliOptions.MonitorId),
+                        parseResult.GetValueForOption(CliOptions.SettingFilter),
+                        output,
+                        cts.Token);
+                }
+
+                if (command == root.SetCommand)
+                {
+                    var inputs = new SetCommandInputs
+                    {
+                        MonitorNumber = parseResult.GetValueForOption(CliOptions.MonitorNumber),
+                        MonitorId = parseResult.GetValueForOption(CliOptions.MonitorId),
+                        Brightness = parseResult.GetValueForOption(CliOptions.Brightness),
+                        Contrast = parseResult.GetValueForOption(CliOptions.Contrast),
+                        Volume = parseResult.GetValueForOption(CliOptions.Volume),
+                        ColorTemperature = parseResult.GetValueForOption(CliOptions.ColorTemperature),
+                        InputSource = parseResult.GetValueForOption(CliOptions.InputSource),
+                        PowerState = parseResult.GetValueForOption(CliOptions.PowerState),
+                        Orientation = parseResult.GetValueForOption(CliOptions.Orientation),
+                        ConfirmPowerOff = parseResult.GetValueForOption(CliOptions.ConfirmPowerOff),
+                    };
+
+                    return SetCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, inputs, output, cts.Token);
+                }
+
+                return root.InvokeAsync(args);
             }
 
-            return await root.InvokeAsync(args);
+            var commandTask = DispatchAsync();
+
+            // Race the command against cancellation (the timeout timer OR Ctrl+C, both of which cancel
+            // `cts`). A wedged synchronous DDC/CI call cannot observe the token, so without this race a
+            // single unresponsive monitor would block the process past the deadline. If cancellation
+            // wins, report TIMEOUT and exit hard: we deliberately skip the `using` disposal below
+            // because a background thread may still be inside a blocking native call against the
+            // handles MonitorManager would otherwise free (a use-after-free on teardown). The orphaned
+            // call is abandoned with the exiting process.
+            var cancellationWaiter = Task.Delay(Timeout.Infinite, cts.Token);
+            var finished = await Task.WhenAny(commandTask, cancellationWaiter);
+            if (finished != commandTask && !commandTask.IsCompleted)
+            {
+                output.WriteError(BuildTimeoutErrorResult(parseResult.CommandResult.Command.Name, timedOut, timeoutSeconds));
+                Console.Out.Flush();
+                Console.Error.Flush();
+                Environment.Exit(CliExitCodes.Timeout);
+            }
+
+            // Awaiting the completed task surfaces cooperative cancellation (discovery checkpoints or
+            // the post-write token check) as OperationCanceledException → handled below as TIMEOUT.
+            return await commandTask;
         }
         catch (OperationCanceledException)
         {
-            output.WriteError(new CliErrorResult
-            {
-                Command = parseResult.CommandResult.Command.Name,
-                Error = new CliError
-                {
-                    Code = CliErrorCodes.Timeout,
-                    ExitCode = CliExitCodes.Timeout,
-                    Message = timedOut
-                        ? $"operation timed out after {timeoutSeconds}s"
-                        : "operation was cancelled",
-                },
-            });
+            output.WriteError(BuildTimeoutErrorResult(parseResult.CommandResult.Command.Name, timedOut, timeoutSeconds));
             return CliExitCodes.Timeout;
         }
         catch (Exception ex)
@@ -204,6 +219,58 @@ public static class Program
 
     public static bool IsVersionRequest(ParseResult parseResult)
         => HasVersionToken(parseResult) && parseResult.CommandResult.Command is RootCommand;
+
+    /// <summary>
+    /// Collapses one or more System.CommandLine parse-error messages into a single
+    /// <see cref="CliErrorResult"/> so the error stream stays a single parseable envelope.
+    /// </summary>
+    public static CliErrorResult BuildParseErrorResult(string command, IEnumerable<string> messages)
+    {
+        var combined = string.Join("; ", messages.Where(m => !string.IsNullOrWhiteSpace(m)));
+        return new CliErrorResult
+        {
+            Command = command,
+            Error = new CliError
+            {
+                Code = CliErrorCodes.ArgumentError,
+                ExitCode = CliExitCodes.ArgumentError,
+                Message = combined.Length == 0 ? "invalid arguments" : combined,
+            },
+        };
+    }
+
+    // Shared TIMEOUT envelope for both the cancellation-race path and the OperationCanceledException catch.
+    private static CliErrorResult BuildTimeoutErrorResult(string command, bool timedOut, int timeoutSeconds)
+        => new()
+        {
+            Command = command,
+            Error = new CliError
+            {
+                Code = CliErrorCodes.Timeout,
+                ExitCode = CliExitCodes.Timeout,
+                Message = timedOut
+                    ? $"operation timed out after {timeoutSeconds}s"
+                    : "operation was cancelled",
+            },
+        };
+
+    private static void TrySetUtf8Output()
+    {
+        try
+        {
+            // UTF-8 without a BOM: a leading BOM in redirected/piped output would corrupt --json
+            // for consumers that don't strip it (e.g. some JSON parsers and shells).
+            Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
+        }
+        catch (IOException)
+        {
+            // No real console attached (handles redirected/closed); leave the default encoding.
+        }
+        catch (System.Security.SecurityException)
+        {
+            // Host policy forbids changing console encoding; not fatal for the operation.
+        }
+    }
 
     private static PowerDisplayRootCommand BuildRootCommand() => new();
 }

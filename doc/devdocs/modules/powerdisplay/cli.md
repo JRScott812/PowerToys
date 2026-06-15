@@ -37,8 +37,10 @@ Precedence rules:
 - Neither flag → `get` operates on **all** discovered monitors; `set` and `capabilities` error with exit code `6` (`SELECTOR_MISSING`).
 - Only `-n` → resolve by `MonitorNumber`.
 - Only `-i` → exact, case-insensitive match on `Monitor.Id`.
-- **Both** → `-i` wins. A warning is printed to stderr noting that `-n` was ignored.
+- **Both** → `-i` wins. A warning is printed to stderr noting that `-n` was ignored (this warning is still emitted even when the `-i` value matches no monitor).
 - Selector matches nothing → exit code `1` (`MONITOR_NOT_FOUND`).
+
+> `-n` is the stable Windows display index, not a recomputed compact list. Hiding a monitor in PowerDisplay settings therefore leaves a gap in the numbering (e.g. `1, 3, 4`) rather than renumbering — `list` shows the same gapped numbers, and this matches the GUI.
 
 ## `list`
 
@@ -318,6 +320,18 @@ Error envelopes are written to **stderr** (not stdout).
 ```
 
 Error codes (the `error.code` string): `MONITOR_NOT_FOUND`, `OUT_OF_RANGE`, `INVALID_DISCRETE_VALUE`, `UNSUPPORTED_FEATURE`, `HARDWARE_FAILURE`, `SELECTOR_MISSING`, `ARGUMENT_ERROR`, `TIMEOUT`, `INTERNAL_ERROR`.
+
+The `error` object always carries `code`, `exitCode`, and `message`. The remaining fields are optional and present only when relevant:
+
+| Field | Present when | Example |
+|---|---|---|
+| `setting` | the error is tied to a specific setting | `"input-source"` |
+| `requested` | a value was supplied and rejected | `"PIZZA"` |
+| `expectedRange` | `OUT_OF_RANGE` | `"[0, 100]"` |
+| `supported` | `INVALID_DISCRETE_VALUE` (the monitor advertised a set) | `[{ "name": "HDMI-1", "vcp": "0x11" }]` |
+| `hint` | a remediation hint is available | `"pass a name from the list above, or a raw hex value like 0x11"` |
+
+A sibling `monitor` object (same shape as the success envelope's) is also included when the failing operation had already resolved a target monitor.
 
 ## Logging
 

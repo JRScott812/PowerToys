@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PowerDisplay.Cli.Commands;
+using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
@@ -109,6 +110,20 @@ public class GetCommandTests
         Assert.AreEqual(1, output.LastGetResult!.Monitors[0].Settings.Count);
         Assert.AreEqual("brightness", output.LastGetResult.Monitors[0].Settings[0].Setting);
         Assert.AreEqual("30%", output.LastGetResult.Monitors[0].Settings[0].Display);
+    }
+
+    [TestMethod]
+    public void EmitAll_UnknownSetting_ReturnsArgumentError_WithHint()
+    {
+        var monitors = new List<Monitor> { Sample(1, "\\\\?\\DISPLAY#A", "Dell", "DDC/CI") };
+        var output = new CapturingOutput();
+
+        var exit = GetCommand.EmitAll(monitors, settingFilter: "bogus", output);
+
+        Assert.AreEqual(CliExitCodes.ArgumentError, exit);
+        Assert.IsNotNull(output.LastErrorResult);
+        Assert.AreEqual(CliErrorCodes.ArgumentError, output.LastErrorResult!.Error.Code);
+        StringAssert.Contains(output.LastErrorResult.Error.Hint, "brightness");
     }
 
     [TestMethod]

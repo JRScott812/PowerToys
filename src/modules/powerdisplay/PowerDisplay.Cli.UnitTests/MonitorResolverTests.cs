@@ -86,4 +86,21 @@ public class MonitorResolverTests
         Assert.AreEqual(CliErrorCodes.MonitorNotFound, result.Error!.Code);
         StringAssert.Contains(result.Error.Message, "UNKNOWN");
     }
+
+    [TestMethod]
+    public void Resolve_BothSelectors_IdNotFound_StillWarnsAboutNumber()
+    {
+        // Both flags supplied but -i matches nothing: -i still "wins" (the error is keyed on the id),
+        // and the spec's "--monitor-number ignored" warning must still be surfaced.
+        var result = MonitorResolver.Resolve(
+            SampleMonitors(),
+            monitorNumber: 1,
+            monitorId: "\\\\?\\DISPLAY#UNKNOWN");
+
+        Assert.IsNull(result.Monitor);
+        Assert.IsNotNull(result.Error);
+        Assert.AreEqual(CliErrorCodes.MonitorNotFound, result.Error!.Code);
+        Assert.IsNotNull(result.Warning);
+        StringAssert.Contains(result.Warning!, "--monitor-number 1 ignored");
+    }
 }

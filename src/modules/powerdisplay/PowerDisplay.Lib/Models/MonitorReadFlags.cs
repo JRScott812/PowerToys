@@ -16,5 +16,6 @@ namespace PowerDisplay.Common.Models
         ColorTemperature = 1 << 3,
         InputSource = 1 << 4,
         PowerState = 1 << 5,
+        Orientation = 1 << 6,
     }
 }

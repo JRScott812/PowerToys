@@ -98,4 +98,18 @@ public class DiscreteValueResolverTests
         Assert.IsNull(error);
         Assert.AreEqual(0x01, resolved);
     }
+
+    [TestMethod]
+    public void TryResolve_PowerStateOffNames_ResolveToVcpValues()
+    {
+        // The off-state names documented by the spec (and now by --power-state help) must
+        // round-trip; this also pins the names IsPowerOff relies on to gate confirmation.
+        var supported = new[] { 0x01, 0x04, 0x05 };
+
+        Assert.AreEqual(0x04, DiscreteValueResolver.TryResolve(0xD6, "power-state", "Off (DPM)", supported, out var dpmError));
+        Assert.IsNull(dpmError);
+
+        Assert.AreEqual(0x05, DiscreteValueResolver.TryResolve(0xD6, "power-state", "Off (Hard)", supported, out var hardError));
+        Assert.IsNull(hardError);
+    }
 }

@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -87,6 +88,27 @@ public class CapabilitiesCommandTests
         Assert.AreEqual(1, output.Caps!.Monitor.Number);
         Assert.AreEqual("DDC/CI", output.Caps.CommunicationMethod);
         Assert.IsTrue(output.Caps.VcpCodes.Count >= 2);
+    }
+
+    [TestMethod]
+    public async Task Capabilities_DistinguishesContinuousAndDiscreteCodes()
+    {
+        var mm = new FakeMonitorManager(MonitorWithCaps());
+        var output = new Capturing();
+
+        var exit = await CapabilitiesCommand.RunAsync(mm, new HashSet<string>(), 1, null, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+
+        var brightness = output.Caps!.VcpCodes.Single(c => c.Code == "0x10");
+        Assert.IsTrue(brightness.Continuous);
+        Assert.IsNull(brightness.DiscreteValues);
+
+        var power = output.Caps.VcpCodes.Single(c => c.Code == "0xD6");
+        Assert.IsFalse(power.Continuous);
+        Assert.IsNotNull(power.DiscreteValues);
+        CollectionAssert.Contains(power.DiscreteValues!.ToList(), "On (0x01)");
+        CollectionAssert.Contains(power.DiscreteValues!.ToList(), "Off (DPM) (0x04)");
     }
 
     [TestMethod]

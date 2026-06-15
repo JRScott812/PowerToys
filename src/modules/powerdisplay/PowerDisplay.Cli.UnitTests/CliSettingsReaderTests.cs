@@ -66,6 +66,27 @@ public class CliSettingsReaderTests
     }
 
     [TestMethod]
+    public void Read_HiddenIdMatch_IsCaseInsensitive()
+    {
+        // The reader builds the hidden-id set with StringComparer.OrdinalIgnoreCase; a regression
+        // dropping that would silently stop hiding monitors whose discovered id casing differs.
+        var settings = new PowerDisplaySettings();
+        settings.Properties.Monitors.Add(new MonitorInfo { Id = "MON-A", IsHidden = true });
+
+        var tmp = Path.Combine(Path.GetTempPath(), "pd-cli-settings-caseinsensitive.json");
+        File.WriteAllText(tmp, settings.ToJsonString());
+        try
+        {
+            var result = CliSettingsReader.Read(tmp);
+            Assert.IsTrue(result.HiddenMonitorIds.Contains("mon-a"));
+        }
+        finally
+        {
+            File.Delete(tmp);
+        }
+    }
+
+    [TestMethod]
     public void Read_MalformedJson_ReturnsDefault()
     {
         var tmp = Path.Combine(Path.GetTempPath(), "pd-cli-settings-malformed.json");

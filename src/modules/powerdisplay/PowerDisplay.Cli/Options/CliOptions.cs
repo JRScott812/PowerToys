@@ -80,7 +80,7 @@ public static class CliOptions
 
     public static readonly Option<string?> PowerState = new(
         ["--power-state"],
-        "Power state name (On, Standby, Suspend, Off-DPM, Off-Hard) or hex VCP value.")
+        "Power state name (On, Standby, Suspend, \"Off (DPM)\", \"Off (Hard)\") or hex VCP value.")
     {
         Arity = ArgumentArity.ExactlyOne,
     };

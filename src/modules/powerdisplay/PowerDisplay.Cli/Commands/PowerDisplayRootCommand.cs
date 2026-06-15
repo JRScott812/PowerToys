@@ -12,6 +12,8 @@ namespace PowerDisplay.Cli.Commands;
 /// instances are captured as properties so <see cref="Program"/> can use reference
 /// equality on <c>parseResult.CommandResult.Command</c> for dispatch.
 /// </summary>
+// 'partial' is required by the CsWinRT analyzer (CsWinRT1028) for AOT/WinRT-ABI compatibility,
+// even though there is only one declaration.
 public sealed partial class PowerDisplayRootCommand : RootCommand
 {
     public PowerDisplayRootCommand()
