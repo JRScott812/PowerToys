@@ -18,8 +18,9 @@ public sealed class CliMonitorRef
 
     /// <summary>
     /// Communication transport (<c>DDC/CI</c> for external monitors, <c>WMI</c> for
-    /// internal panels). Empty string when the monitor came from a controller that
-    /// did not populate the field.
+    /// internal panels). Set on the <c>list</c>/<c>get</c>/<c>set</c> envelopes; left
+    /// <c>null</c> (and omitted from JSON) by <c>capabilities</c>, which carries the
+    /// transport in its dedicated top-level <c>communicationMethod</c> field instead.
     /// </summary>
-    public string Method { get; init; } = string.Empty;
+    public string? Method { get; init; }
 }

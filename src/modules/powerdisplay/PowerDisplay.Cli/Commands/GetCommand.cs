@@ -70,18 +70,19 @@ public static class GetCommand
 
     public static int EmitAll(IReadOnlyList<Monitor> monitors, string? settingFilter, ICliOutput output)
     {
+        // An unknown --setting is monitor-independent; validate it once up front and emit the
+        // error without pinning it to whichever monitor happened to be enumerated first.
+        if (TryGetUnknownSettingError(settingFilter, out var settingError))
+        {
+            output.WriteError(new CliErrorResult { Command = "get", Error = settingError! });
+            return settingError!.ExitCode;
+        }
+
         var entries = new List<CliGetMonitorEntry>(monitors.Count);
         foreach (var monitor in monitors)
         {
             var monitorRef = SetCommand.ToRef(monitor);
-            var entry = BuildEntry(monitor, monitorRef, settingFilter, out var settingError);
-            if (settingError is not null)
-            {
-                output.WriteError(new CliErrorResult { Command = "get", Monitor = monitorRef, Error = settingError });
-                return settingError.ExitCode;
-            }
-
-            entries.Add(entry!);
+            entries.Add(BuildEntry(monitor, monitorRef, settingFilter, out _)!);
         }
 
         output.WriteGetResult(new CliGetResult { Monitors = entries });
@@ -94,7 +95,10 @@ public static class GetCommand
         string? settingFilter,
         out CliError? error)
     {
-        error = null;
+        if (TryGetUnknownSettingError(settingFilter, out error))
+        {
+            return null;
+        }
 
         IEnumerable<string> settingNames = settingFilter is null
             ? AllSettingNames
@@ -103,21 +107,9 @@ public static class GetCommand
         var results = new List<CliSettingValue>();
         foreach (var name in settingNames)
         {
-            var value = BuildSettingValue(monitor, name);
-            if (value is null)
-            {
-                error = new CliError
-                {
-                    Code = CliErrorCodes.ArgumentError,
-                    ExitCode = CliExitCodes.ArgumentError,
-                    Setting = name,
-                    Message = $"unknown setting '{name}'",
-                    Hint = $"valid settings: {string.Join(", ", AllSettingNames)}",
-                };
-                return null;
-            }
-
-            results.Add(value);
+            // settingFilter was validated above and every AllSettingNames entry is handled by
+            // the switch, so BuildSettingValue never returns null here.
+            results.Add(BuildSettingValue(monitor, name)!);
         }
 
         return new CliGetMonitorEntry
@@ -125,6 +117,31 @@ public static class GetCommand
             Monitor = monitorRef,
             Settings = results,
         };
+    }
+
+    /// <summary>
+    /// Validates the optional <c>--setting</c> filter against <see cref="AllSettingNames"/>.
+    /// Returns <c>true</c> with a populated, monitor-independent error when the filter names an
+    /// unknown setting; the error echoes the user's original input verbatim rather than the
+    /// lower-cased lookup key.
+    /// </summary>
+    private static bool TryGetUnknownSettingError(string? settingFilter, out CliError? error)
+    {
+        error = null;
+        if (settingFilter is null || System.Array.IndexOf(AllSettingNames, settingFilter.ToLowerInvariant()) >= 0)
+        {
+            return false;
+        }
+
+        error = new CliError
+        {
+            Code = CliErrorCodes.ArgumentError,
+            ExitCode = CliExitCodes.ArgumentError,
+            Setting = settingFilter,
+            Message = $"unknown setting '{settingFilter}'",
+            Hint = $"valid settings: {string.Join(", ", AllSettingNames)}",
+        };
+        return true;
     }
 
     private static CliSettingValue? BuildSettingValue(Monitor monitor, string settingName) => settingName switch

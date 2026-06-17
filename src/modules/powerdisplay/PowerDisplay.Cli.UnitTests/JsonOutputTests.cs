@@ -150,7 +150,8 @@ public class JsonOutputTests
 
         json.WriteCapabilitiesResult(new CliCapabilitiesResult
         {
-            Monitor = new CliMonitorRef { Number = 1, Id = "A", Name = "Dell", Method = "DDC/CI" },
+            // capabilities carries transport in communicationMethod, not monitor.method.
+            Monitor = new CliMonitorRef { Number = 1, Id = "A", Name = "Dell" },
             CommunicationMethod = "DDC/CI",
             VcpCodes =
             [
@@ -162,6 +163,9 @@ public class JsonOutputTests
         var doc = JsonDocument.Parse(stdout.ToString());
         Assert.AreEqual("capabilities", doc.RootElement.GetProperty("command").GetString());
         Assert.AreEqual("DDC/CI", doc.RootElement.GetProperty("communicationMethod").GetString());
+
+        // Transport is not duplicated inside the monitor ref (null Method is omitted).
+        Assert.IsFalse(doc.RootElement.GetProperty("monitor").TryGetProperty("method", out _));
 
         var codes = doc.RootElement.GetProperty("vcpCodes");
         Assert.IsTrue(codes[0].GetProperty("continuous").GetBoolean());

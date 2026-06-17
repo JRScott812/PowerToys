@@ -58,13 +58,16 @@ public static class DiscreteValueResolver
 
     private static int? TryParseHex(string raw)
     {
+        // VCP discrete values are a single byte (0x00-0xFF). Reject out-of-range literals
+        // (e.g. 0x100 -> 256, 0xFFFFFFFF -> -1) here so they surface a clean
+        // INVALID_DISCRETE_VALUE instead of being truncated/sign-extended into the wrong
+        // byte at the native SetVCPFeature((uint)value) call. StringComparison.OrdinalIgnoreCase
+        // already matches both "0x" and "0X".
         if (raw.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
-            || raw.StartsWith("0X", StringComparison.Ordinal))
+            && int.TryParse(raw[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex)
+            && hex is >= 0x00 and <= 0xFF)
         {
-            if (int.TryParse(raw[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hex))
-            {
-                return hex;
-            }
+            return hex;
         }
 
         return null;

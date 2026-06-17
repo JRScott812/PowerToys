@@ -103,7 +103,7 @@ public class DiscreteValueResolverTests
     public void TryResolve_PowerStateOffNames_ResolveToVcpValues()
     {
         // The off-state names documented by the spec (and now by --power-state help) must
-        // round-trip; this also pins the names IsPowerOff relies on to gate confirmation.
+        // round-trip; this also pins the names the power-off gate relies on to require confirmation.
         var supported = new[] { 0x01, 0x04, 0x05 };
 
         Assert.AreEqual(0x04, DiscreteValueResolver.TryResolve(0xD6, "power-state", "Off (DPM)", supported, out var dpmError));
@@ -111,5 +111,45 @@ public class DiscreteValueResolverTests
 
         Assert.AreEqual(0x05, DiscreteValueResolver.TryResolve(0xD6, "power-state", "Off (Hard)", supported, out var hardError));
         Assert.IsNull(hardError);
+    }
+
+    [TestMethod]
+    public void TryResolve_HexAboveByteRange_NoSupportedSet_ReturnsInvalidDiscreteError()
+    {
+        // 0x100 (256) is not a valid single-byte VCP value. Even when the monitor advertises no
+        // supported set (so the membership check is skipped), it must be rejected rather than
+        // truncated into a wrong byte at the native SetVCPFeature((uint)value) call.
+        var resolved = DiscreteValueResolver.TryResolve(0x60, "input-source", "0x100", supportedValues: null, out var error);
+        Assert.IsNull(resolved);
+        Assert.IsNotNull(error);
+        Assert.AreEqual(CliErrorCodes.InvalidDiscreteValue, error!.Code);
+    }
+
+    [TestMethod]
+    public void TryResolve_HexThirtyTwoBitAllOnes_ReturnsInvalidDiscreteError()
+    {
+        // 0xFFFFFFFF parses to -1 as Int32; it must not flow through to the (uint) native write.
+        var resolved = DiscreteValueResolver.TryResolve(0x60, "input-source", "0xFFFFFFFF", supportedValues: null, out var error);
+        Assert.IsNull(resolved);
+        Assert.IsNotNull(error);
+        Assert.AreEqual(CliErrorCodes.InvalidDiscreteValue, error!.Code);
+    }
+
+    [TestMethod]
+    public void TryResolve_HexAboveByteRange_WithSupportedSet_ReturnsInvalidDiscreteError()
+    {
+        var resolved = DiscreteValueResolver.TryResolve(0x60, "input-source", "0x100", SupportedInputSources, out var error);
+        Assert.IsNull(resolved);
+        Assert.IsNotNull(error);
+        Assert.AreEqual(CliErrorCodes.InvalidDiscreteValue, error!.Code);
+    }
+
+    [TestMethod]
+    public void TryResolve_HexMaxByte_IsAcceptedWhenNoSupportedSet()
+    {
+        // 0xFF is the largest valid VCP byte and must still resolve when no set is advertised.
+        var resolved = DiscreteValueResolver.TryResolve(0x60, "input-source", "0xFF", supportedValues: null, out var error);
+        Assert.IsNull(error);
+        Assert.AreEqual(0xFF, resolved);
     }
 }

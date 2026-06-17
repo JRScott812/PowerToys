@@ -59,7 +59,15 @@ public static class CapabilitiesCommand
 
         output.WriteCapabilitiesResult(new CliCapabilitiesResult
         {
-            Monitor = SetCommand.ToRef(monitor),
+            // Transport lives in the dedicated top-level CommunicationMethod below, so leave
+            // Method off the monitor ref (it is omitted from JSON) to avoid emitting the same
+            // value twice in the capabilities envelope.
+            Monitor = new CliMonitorRef
+            {
+                Number = monitor.MonitorNumber,
+                Id = monitor.Id,
+                Name = monitor.Name,
+            },
             CommunicationMethod = monitor.CommunicationMethod,
             RawCapabilities = monitor.CapabilitiesRaw,
             Model = caps?.Model,

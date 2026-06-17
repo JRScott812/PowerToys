@@ -116,7 +116,7 @@ Each accepts either the friendly name **or** the raw hex VCP value. Names are ca
 
 #### Power-off confirmation
 
-Applying a power-state that turns the display off (`Off (DPM)` or `Off (Hard)`) requires the `--confirm-power-off` flag. Without it the CLI refuses with exit code `7` (`ARGUMENT_ERROR`). If the monitor does not support power-state control at all, exit code `4` (`UNSUPPORTED_FEATURE`) is returned instead.
+Applying a power-state that blanks the panel — `Standby` and `Suspend` (DPMS sleep, wake-on-input) as well as `Off (DPM)` and `Off (Hard)` — requires the `--confirm-power-off` flag. Without it the CLI refuses with exit code `7` (`ARGUMENT_ERROR`). Only `On` applies without confirmation. If the monitor does not support power-state control at all, exit code `4` (`UNSUPPORTED_FEATURE`) is returned instead.
 
 ```
 powerdisplay set -n 1 --power-state "Off (DPM)" --confirm-power-off
@@ -128,7 +128,7 @@ Examples:
 powerdisplay set -n 1 --input-source HDMI-1
 powerdisplay set -n 1 --input-source 0x11
 powerdisplay set -n 2 --color-temperature 6500K
-powerdisplay set -i "\\?\DISPLAY#DELD1A8#5&abc&0&UID12345" --power-state Standby
+powerdisplay set -i "\\?\DISPLAY#DELD1A8#5&abc&0&UID12345" --power-state Standby --confirm-power-off
 powerdisplay set -n 1 --orientation 90
 ```
 
@@ -173,7 +173,7 @@ Monitor 1 (Dell U2723QE) via DDC/CI
 | Flag | Effect |
 |---|---|
 | `--json` | Emit a stable JSON envelope instead of human-readable text. Data goes to stdout; warnings and error envelopes go to **stderr**. |
-| `--help` / `-h` / `-?` | Print help for the (sub)command. |
+| `--help` / `-h` / `-?` / `/?` | Print help for the (sub)command. |
 | `--version` | Print the CLI version. |
 | `--timeout <seconds>` | Abort the operation after N seconds (default 30; 0 disables). Useful for unresponsive DDC monitors. |
 | `--quiet` | Suppress warning messages on stderr. |
@@ -194,7 +194,7 @@ The CLI reads the saved PowerDisplay `settings.json` on startup. It honors the *
 | 4 | `UnsupportedFeature` | Monitor does not support this setting. |
 | 5 | `HardwareFailure` | DDC/CI or WMI write returned failure. |
 | 6 | `SelectorMissing` | `set` or `capabilities` invoked without `-n`/`-i`. |
-| 7 | `ArgumentError` | `System.CommandLine` parse failure, missing/duplicated `--<setting>`, unknown setting name, or missing `--confirm-power-off` for a power-off state. |
+| 7 | `ArgumentError` | `System.CommandLine` parse failure (including a negative `--timeout`), missing/duplicated `--<setting>`, unknown setting name, or missing `--confirm-power-off` for a display-off/sleep state. |
 | 8 | `Timeout` | Operation timed out (`--timeout`) or was cancelled (Ctrl+C). |
 | 9 | `InternalError` | Unexpected internal error. |
 
@@ -208,8 +208,8 @@ The `--json` flag switches every command to a stable envelope. All keys are came
 
 ```json
 {
-  "version": "1.0",
   "ok": true,
+  "version": "1.0",
   "command": "set",
   "monitor": {
     "number": 1,
@@ -231,8 +231,8 @@ The `orientation` setting's `raw` value is in **degrees** (0, 90, 180, or 270), 
 
 ```json
 {
-  "version": "1.0",
   "ok": true,
+  "version": "1.0",
   "command": "get",
   "monitors": [
     {
@@ -252,8 +252,8 @@ The `orientation` setting's `raw` value is in **degrees** (0, 90, 180, or 270), 
 
 ```json
 {
-  "version": "1.0",
   "ok": true,
+  "version": "1.0",
   "command": "list",
   "monitors": [
     {
@@ -298,8 +298,8 @@ Error envelopes are written to **stderr** (not stdout).
 
 ```json
 {
-  "version": "1.0",
   "ok": false,
+  "version": "1.0",
   "command": "set",
   "monitor": { "number": 1, "id": "...", "name": "Dell U2723QE", "method": "DDC/CI" },
   "error": {

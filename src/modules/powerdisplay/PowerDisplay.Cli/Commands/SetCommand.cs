@@ -175,7 +175,7 @@ public static class SetCommand
                 (mm, id, v, ct) => mm.SetPowerStateAsync(id, v, ct),
                 output,
                 cancellationToken,
-                requireConfirmation: !inputs.ConfirmPowerOff && IsPowerOff(powerState),
+                confirmIfDisplayBlanking: !inputs.ConfirmPowerOff,
                 confirmationSetting: "power-state");
         }
 
@@ -237,12 +237,10 @@ public static class SetCommand
             : $"{name} (0x{value:X2})";
     }
 
-    // VCP 0xD6: 0x04 = Off (DPM), 0x05 = Off (Hard). Accepts the friendly name or hex.
-    internal static bool IsPowerOff(string raw)
-    {
-        var resolved = DiscreteValueResolver.TryResolve(0xD6, "power-state", raw, supportedValues: null, out _);
-        return resolved is 0x04 or 0x05;
-    }
+    // VCP 0xD6 states that leave a headless caller staring at a dark panel: 0x02 Standby and
+    // 0x03 Suspend (DPMS sleep, wake-on-input) as well as 0x04 Off (DPM) and 0x05 Off (Hard).
+    // All four are gated behind --confirm-power-off; only 0x01 On applies without confirmation.
+    internal static bool IsDisplayBlanking(int powerState) => powerState is 0x02 or 0x03 or 0x04 or 0x05;
 
     internal static string OrientationDegrees(int index) => index switch
     {
@@ -327,7 +325,7 @@ public static class SetCommand
         Func<IMonitorManager, string, int, CancellationToken, Task<MonitorOperationResult>> apply,
         ICliOutput output,
         CancellationToken cancellationToken,
-        bool requireConfirmation = false,
+        bool confirmIfDisplayBlanking = false,
         string? confirmationSetting = null)
     {
         if (!supportsCheck)
@@ -346,7 +344,10 @@ public static class SetCommand
             return valueError!.ExitCode;
         }
 
-        if (requireConfirmation)
+        // Gate any state that blanks the panel on the already-resolved value, so we never
+        // re-parse the raw input (the friendly-name lookup scans 0x00-0xFF) just to decide
+        // whether to ask for confirmation.
+        if (confirmIfDisplayBlanking && IsDisplayBlanking(resolved.Value))
         {
             output.WriteError(new CliErrorResult
             {
@@ -358,8 +359,8 @@ public static class SetCommand
                     ExitCode = CliExitCodes.ArgumentError,
                     Setting = confirmationSetting,
                     Requested = raw,
-                    Message = $"refusing to turn off Monitor {monitorRef.Number} ({monitorRef.Name}) without confirmation",
-                    Hint = "re-run with --confirm-power-off to power the display off",
+                    Message = $"refusing to power down or sleep Monitor {monitorRef.Number} ({monitorRef.Name}) without confirmation",
+                    Hint = "re-run with --confirm-power-off to power the display off or put it to sleep",
                 },
             });
             return CliExitCodes.ArgumentError;

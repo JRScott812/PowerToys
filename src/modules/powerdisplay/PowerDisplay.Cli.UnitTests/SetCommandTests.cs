@@ -23,6 +23,12 @@ public class SetCommandTests
 
     private static readonly int[] PowerStateSupportedValues = { 0x01, 0x04 };
 
+    private static readonly int[] PowerStateWithStandbyValues = { 0x01, 0x02, 0x04 };
+
+    private static readonly int[] ColorTemperatureSupportedValues = { 0x01, 0x05, 0x08 };
+
+    private static readonly int[] InputSourceSupportedValues = { 0x0F, 0x11, 0x12 };
+
     private sealed class CapturingOutput : ICliOutput
     {
         public CliSetResult? Set { get; private set; }
@@ -89,6 +95,51 @@ public class SetCommandTests
             Orientation = orientation,
             ReadValues = read,
         };
+
+    private static Monitor VolumeMonitor()
+        => new()
+        {
+            MonitorNumber = 1,
+            Id = "MON-1",
+            Name = "Dell",
+            CommunicationMethod = "DDC/CI",
+            CurrentVolume = 20,
+            Capabilities = MonitorCapabilities.Volume,
+            ReadValues = MonitorReadFlags.Volume,
+        };
+
+    private static Monitor ColorTemperatureMonitor()
+    {
+        var caps = new VcpCapabilities();
+        caps.SupportedVcpCodes[0x14] = new VcpCodeInfo(0x14, "Select Color Preset", ColorTemperatureSupportedValues);
+        return new Monitor
+        {
+            MonitorNumber = 1,
+            Id = "MON-1",
+            Name = "Dell",
+            CommunicationMethod = "DDC/CI",
+            SupportsColorTemperature = true,
+            CurrentColorTemperature = 0x05,
+            VcpCapabilitiesInfo = caps,
+            ReadValues = MonitorReadFlags.ColorTemperature,
+        };
+    }
+
+    private static Monitor InputSourceMonitor(int[]? supportedValues = null)
+    {
+        var caps = new VcpCapabilities();
+        caps.SupportedVcpCodes[0x60] = new VcpCodeInfo(0x60, "Input Source", supportedValues ?? InputSourceSupportedValues);
+        return new Monitor
+        {
+            MonitorNumber = 1,
+            Id = "MON-1",
+            Name = "Dell",
+            CommunicationMethod = "DDC/CI",
+            CurrentInputSource = 0x0F,
+            VcpCapabilitiesInfo = caps,
+            ReadValues = MonitorReadFlags.InputSource,
+        };
+    }
 
     [TestMethod]
     public async Task Set_Brightness_Success_ReportsBeforeAfter()
@@ -373,8 +424,91 @@ public class SetCommandTests
             CancellationToken.None);
 
         Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(1, mm.Writes.Count); // the ignored -n target was never written
         Assert.AreEqual(("brightness", "MON-2", 55), mm.Writes[0]); // -i target, not -n
         Assert.IsNotNull(output.Warning);
         StringAssert.Contains(output.Warning!, "ignored");
+    }
+
+    [TestMethod]
+    public async Task Set_Volume_Success_ReportsBeforeAfter()
+    {
+        var mm = new FakeMonitorManager(VolumeMonitor());
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, Volume = 35 }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(20, output.Set!.BeforeRaw);
+        Assert.AreEqual(35, output.Set.AfterRaw);
+        Assert.AreEqual("35%", output.Set.AfterDisplay);
+        Assert.AreEqual(("volume", "MON-1", 35), mm.Writes[0]);
+    }
+
+    [TestMethod]
+    public async Task Set_ColorTemperature_InSupportedSet_WritesResolvedValue()
+    {
+        var mm = new FakeMonitorManager(ColorTemperatureMonitor());
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, ColorTemperature = "0x08" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(0x08, output.Set!.AfterRaw);
+        Assert.AreEqual(("color-temperature", "MON-1", 0x08), mm.Writes[0]);
+    }
+
+    [TestMethod]
+    public async Task Set_InputSource_ByFriendlyName_WritesResolvedVcpValue()
+    {
+        var mm = new FakeMonitorManager(InputSourceMonitor());
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, InputSource = "HDMI-1" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(0x11, output.Set!.AfterRaw); // HDMI-1 == VCP 0x11
+        Assert.AreEqual(("input-source", "MON-1", 0x11), mm.Writes[0]);
+    }
+
+    [TestMethod]
+    public async Task Set_InputSource_OutOfByteHex_OnUnenumeratedCode_ReturnsInvalidDiscrete_NoWrite()
+    {
+        // Monitor advertises VCP 0x60 but enumerates no values, so the membership check is
+        // skipped; the resolver's byte-range guard must still reject 0x100 (256) before it can
+        // be truncated into a wrong byte at the native write.
+        var mm = new FakeMonitorManager(InputSourceMonitor(System.Array.Empty<int>()));
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, InputSource = "0x100" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.InvalidDiscreteValue, exit);
+        Assert.AreEqual(0, mm.Writes.Count);
+    }
+
+    [TestMethod]
+    public async Task Set_Standby_WithoutConfirm_IsRejected()
+    {
+        // Standby (0x02) blanks the panel just like Off, so it must also require --confirm-power-off.
+        var mm = new FakeMonitorManager(PowerStateMonitor(PowerStateWithStandbyValues));
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, PowerState = "Standby" }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.ArgumentError, exit);
+        Assert.AreEqual(0, mm.Writes.Count);
+        StringAssert.Contains(output.Error!.Error.Hint, "--confirm-power-off");
+    }
+
+    [TestMethod]
+    public async Task Set_Standby_WithConfirm_IsApplied()
+    {
+        var mm = new FakeMonitorManager(PowerStateMonitor(PowerStateWithStandbyValues));
+        var output = new CapturingOutput();
+
+        var exit = await SetCommand.RunAsync(mm, NoHidden, new SetCommandInputs { MonitorNumber = 1, PowerState = "Standby", ConfirmPowerOff = true }, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(("power-state", "MON-1", 0x02), mm.Writes[0]);
     }
 }

@@ -45,9 +45,12 @@ public static class CliSettingsReader
             {
                 foreach (var m in props.Monitors)
                 {
-                    if (m.IsHidden && !string.IsNullOrEmpty(m.Id))
+                    // A JSON null array element deserializes to a null DTO; skip it (and any
+                    // entry without an id) so one stray "monitors": [..., null] does not throw
+                    // and wipe out MaxCompatibilityMode plus every valid hidden id.
+                    if (m is { IsHidden: true, Id: { } id } && !string.IsNullOrEmpty(id))
                     {
-                        hidden.Add(m.Id);
+                        hidden.Add(id);
                     }
                 }
             }

@@ -60,7 +60,18 @@ public static class Program
         }
 
         // Logs go to %LOCALAPPDATA%\Microsoft\PowerToys\PowerDisplay\Logs\<version>.
-        Logger.InitializeLogger("\\PowerDisplay\\Logs");
+        // Guard initialization: an unwritable log path (locked profile, full disk, policy
+        // redirection) creates the directory / trace listener eagerly and would otherwise throw
+        // here — OUTSIDE the try below — crashing with a raw stack trace and bypassing the
+        // single-envelope error contract. The requested operation does not need the log file,
+        // so degrade to no file listener and continue.
+        try
+        {
+            Logger.InitializeLogger("\\PowerDisplay\\Logs");
+        }
+        catch (Exception)
+        {
+        }
 
         var timeoutSeconds = parseResult.GetValueForOption(CliOptions.TimeoutSeconds) ?? DefaultTimeoutSeconds;
         var timedOut = false;

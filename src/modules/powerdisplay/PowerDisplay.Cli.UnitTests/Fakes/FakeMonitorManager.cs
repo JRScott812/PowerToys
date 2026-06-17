@@ -23,9 +23,11 @@ internal sealed class FakeMonitorManager : IMonitorManager
 
     public List<(string Op, string Id, int Value)> Writes { get; } = new();
 
-    public bool MaxCompatibilityModeSet { get; private set; }
-
-    public void SetMaxCompatibilityMode(bool enabled) => MaxCompatibilityModeSet = enabled;
+    public void SetMaxCompatibilityMode(bool enabled)
+    {
+        // No-op: command RunAsync paths under test never call this (Program wires max-compat
+        // onto the real manager before dispatch), so there is nothing to record here.
+    }
 
     public Task<IReadOnlyList<Monitor>> DiscoverMonitorsAsync(CancellationToken cancellationToken = default)
         => Task.FromResult<IReadOnlyList<Monitor>>(_monitors);

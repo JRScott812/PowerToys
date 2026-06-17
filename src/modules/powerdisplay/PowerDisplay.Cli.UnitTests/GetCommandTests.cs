@@ -4,10 +4,13 @@
 
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PowerDisplay.Cli.Commands;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
+using PowerDisplay.Cli.UnitTests.Fakes;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
 namespace PowerDisplay.Cli.UnitTests;
@@ -15,11 +18,15 @@ namespace PowerDisplay.Cli.UnitTests;
 [TestClass]
 public class GetCommandTests
 {
+    private static readonly IReadOnlySet<string> NoHidden = new HashSet<string>();
+
     private sealed class CapturingOutput : ICliOutput
     {
         public CliGetResult? LastGetResult { get; private set; }
 
         public CliErrorResult? LastErrorResult { get; private set; }
+
+        public string? LastWarning { get; private set; }
 
         public void WriteListResult(CliListResult result)
         {
@@ -37,9 +44,7 @@ public class GetCommandTests
 
         public void WriteError(CliErrorResult result) => LastErrorResult = result;
 
-        public void WriteWarning(string message)
-        {
-        }
+        public void WriteWarning(string message) => LastWarning = message;
     }
 
     private static Monitor Sample(int number, string id, string name, string method)
@@ -192,5 +197,106 @@ public class GetCommandTests
         StringAssert.Contains(text, "\\\\?\\DISPLAY#A");
         StringAssert.Contains(text, "brightness");
         StringAssert.Contains(text, "30%");
+    }
+
+    [TestMethod]
+    public void EmitAll_SettingFilterIsCaseInsensitive()
+    {
+        var monitors = new List<Monitor> { Sample(1, "\\\\?\\DISPLAY#A", "Dell", "DDC/CI") };
+        var output = new CapturingOutput();
+
+        // Mixed-case input must resolve to the canonical lower-case setting, not error out.
+        var exit = GetCommand.EmitAll(monitors, settingFilter: "Brightness", output);
+
+        Assert.AreEqual(0, exit);
+        Assert.IsNotNull(output.LastGetResult);
+        Assert.AreEqual(1, output.LastGetResult!.Monitors[0].Settings.Count);
+        Assert.AreEqual("brightness", output.LastGetResult.Monitors[0].Settings[0].Setting);
+    }
+
+    [TestMethod]
+    public void EmitAll_UnknownSetting_ErrorEchoesOriginalInput_WithoutMonitorRef()
+    {
+        var monitors = new List<Monitor> { Sample(1, "\\\\?\\DISPLAY#A", "Dell", "DDC/CI") };
+        var output = new CapturingOutput();
+
+        var exit = GetCommand.EmitAll(monitors, settingFilter: "Brightnesss", output);
+
+        Assert.AreEqual(CliExitCodes.ArgumentError, exit);
+
+        // The error echoes the user's original casing, and a monitor-independent argument error
+        // is not pinned to whichever monitor was enumerated first.
+        StringAssert.Contains(output.LastErrorResult!.Error.Message, "Brightnesss");
+        Assert.IsNull(output.LastErrorResult.Monitor);
+    }
+
+    [TestMethod]
+    public async Task RunAsync_ByNumber_EmitsOnlySelectedMonitor()
+    {
+        var mm = new FakeMonitorManager(
+            Sample(1, "MON-1", "Dell", "DDC/CI"),
+            Sample(2, "MON-2", "Internal", "WMI"));
+        var output = new CapturingOutput();
+
+        var exit = await GetCommand.RunAsync(mm, NoHidden, monitorNumber: 2, monitorId: null, settingFilter: null, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(1, output.LastGetResult!.Monitors.Count);
+        Assert.AreEqual(2, output.LastGetResult.Monitors[0].Monitor.Number);
+    }
+
+    [TestMethod]
+    public async Task RunAsync_NoSelector_EmitsAllMonitors()
+    {
+        var mm = new FakeMonitorManager(
+            Sample(1, "MON-1", "Dell", "DDC/CI"),
+            Sample(2, "MON-2", "Internal", "WMI"));
+        var output = new CapturingOutput();
+
+        var exit = await GetCommand.RunAsync(mm, NoHidden, monitorNumber: null, monitorId: null, settingFilter: null, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(2, output.LastGetResult!.Monitors.Count);
+    }
+
+    [TestMethod]
+    public async Task RunAsync_HiddenMonitor_NotTargetable_ReturnsMonitorNotFound()
+    {
+        // Guards that ExcludeHidden runs before ResolveSelected on the selected path.
+        var mm = new FakeMonitorManager(Sample(1, "MON-1", "Dell", "DDC/CI"));
+        var output = new CapturingOutput();
+        var hidden = new HashSet<string> { "MON-1" };
+
+        var exit = await GetCommand.RunAsync(mm, hidden, monitorNumber: 1, monitorId: null, settingFilter: null, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.MonitorNotFound, exit);
+    }
+
+    [TestMethod]
+    public async Task RunAsync_BothSelectors_IdWins_SurfacesWarning()
+    {
+        var mm = new FakeMonitorManager(
+            Sample(1, "MON-1", "Dell", "DDC/CI"),
+            Sample(2, "MON-2", "Internal", "WMI"));
+        var output = new CapturingOutput();
+
+        var exit = await GetCommand.RunAsync(mm, NoHidden, monitorNumber: 1, monitorId: "MON-2", settingFilter: null, output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+        Assert.AreEqual(2, output.LastGetResult!.Monitors[0].Monitor.Number);
+        Assert.IsNotNull(output.LastWarning);
+    }
+
+    [TestMethod]
+    public async Task RunAsync_SelectedMonitor_UnknownSetting_ReturnsArgumentError()
+    {
+        var mm = new FakeMonitorManager(Sample(1, "MON-1", "Dell", "DDC/CI"));
+        var output = new CapturingOutput();
+
+        var exit = await GetCommand.RunAsync(mm, NoHidden, monitorNumber: 1, monitorId: null, settingFilter: "bogus", output, CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.ArgumentError, exit);
+        Assert.IsNotNull(output.LastErrorResult);
+        Assert.AreEqual(CliErrorCodes.ArgumentError, output.LastErrorResult!.Error.Code);
     }
 }

@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.CommandLine;
+using System.Globalization;
 
 namespace PowerDisplay.Cli.Options;
 
@@ -115,8 +116,24 @@ public static class CliOptions
 
     public static readonly Option<bool> ConfirmPowerOff = new(
         ["--confirm-power-off"],
-        "Required to apply a power-state that turns the display off.")
+        "Required to apply a power-state that powers the display off or puts it to sleep (Standby/Suspend/Off).")
     {
         Arity = ArgumentArity.ZeroOrOne,
     };
+
+    static CliOptions()
+    {
+        // Reject a negative --timeout at parse time so it flows through the single ArgumentError
+        // envelope instead of silently disabling the timeout (the `timeoutSeconds > 0` guard in
+        // Program would otherwise treat a fat-fingered "-5" like the documented "0 = disabled").
+        TimeoutSeconds.AddValidator(result =>
+        {
+            if (result.Tokens.Count != 0
+                && int.TryParse(result.Tokens[0].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds)
+                && seconds < 0)
+            {
+                result.ErrorMessage = "--timeout must be >= 0 (use 0 to disable the timeout).";
+            }
+        });
+    }
 }
