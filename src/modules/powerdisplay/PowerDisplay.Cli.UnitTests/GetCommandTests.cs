@@ -11,6 +11,7 @@ using PowerDisplay.Cli.Commands;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
 using PowerDisplay.Cli.UnitTests.Fakes;
+using PowerDisplay.Common.Models;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
 namespace PowerDisplay.Cli.UnitTests;
@@ -47,7 +48,12 @@ public class GetCommandTests
         public void WriteWarning(string message) => LastWarning = message;
     }
 
-    private static Monitor Sample(int number, string id, string name, string method)
+    private static Monitor Sample(
+        int number,
+        string id,
+        string name,
+        string method,
+        MonitorReadFlags read = MonitorReadFlags.Brightness | MonitorReadFlags.Orientation)
     {
         var m = new Monitor
         {
@@ -62,8 +68,12 @@ public class GetCommandTests
             CurrentInputSource = 0x11,
             CurrentPowerState = 0x01,
             GdiDeviceName = @"\\.\DISPLAY1",
+            ReadValues = read,
         };
-        m.Capabilities = PowerDisplay.Common.Models.MonitorCapabilities.Brightness;
+
+        // Only brightness is in the capability set, so brightness + orientation (GdiDeviceName)
+        // are the supported settings; the rest report supported:false.
+        m.Capabilities = MonitorCapabilities.Brightness;
         return m;
     }
 
@@ -157,6 +167,40 @@ public class GetCommandTests
         Assert.AreEqual("orientation", setting.Setting);
         Assert.AreEqual(90, setting.Raw);   // degrees, not the index 1
         Assert.AreEqual("90°", setting.Display);
+    }
+
+    [TestMethod]
+    public void EmitAll_SupportedButUnread_OmitsValue()
+    {
+        // Brightness is advertised (supported) but discovery never read it: report supported and
+        // omit the value rather than passing off the seeded default as a live reading.
+        var monitors = new List<Monitor> { Sample(1, "\\\\?\\DISPLAY#A", "Dell", "DDC/CI", read: MonitorReadFlags.None) };
+        var output = new CapturingOutput();
+
+        var exit = GetCommand.EmitAll(monitors, settingFilter: "brightness", output);
+
+        Assert.AreEqual(0, exit);
+        var setting = output.LastGetResult!.Monitors[0].Settings[0];
+        Assert.IsTrue(setting.Supported);
+        Assert.IsNull(setting.Raw);
+        Assert.IsNull(setting.Display);
+    }
+
+    [TestMethod]
+    public void EmitAll_UnsupportedSetting_OmitsValue()
+    {
+        // Contrast is not in the capability set: supported:false and no value, matching the text
+        // renderer's "(not supported)" rather than emitting a misleading raw:50/"50%".
+        var monitors = new List<Monitor> { Sample(1, "\\\\?\\DISPLAY#A", "Dell", "DDC/CI") };
+        var output = new CapturingOutput();
+
+        var exit = GetCommand.EmitAll(monitors, settingFilter: "contrast", output);
+
+        Assert.AreEqual(0, exit);
+        var setting = output.LastGetResult!.Monitors[0].Settings[0];
+        Assert.IsFalse(setting.Supported);
+        Assert.IsNull(setting.Raw);
+        Assert.IsNull(setting.Display);
     }
 
     [TestMethod]

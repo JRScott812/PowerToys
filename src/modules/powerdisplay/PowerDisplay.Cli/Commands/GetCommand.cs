@@ -2,11 +2,13 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
+using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
+using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
@@ -146,55 +148,36 @@ public static class GetCommand
 
     private static CliSettingValue? BuildSettingValue(Monitor monitor, string settingName) => settingName switch
     {
-        "brightness" => new CliSettingValue
-        {
-            Setting = "brightness",
-            Raw = monitor.CurrentBrightness,
-            Display = monitor.CurrentBrightness + "%",
-            Supported = monitor.SupportsBrightness,
-        },
-        "contrast" => new CliSettingValue
-        {
-            Setting = "contrast",
-            Raw = monitor.CurrentContrast,
-            Display = monitor.CurrentContrast + "%",
-            Supported = monitor.SupportsContrast,
-        },
-        "volume" => new CliSettingValue
-        {
-            Setting = "volume",
-            Raw = monitor.CurrentVolume,
-            Display = monitor.CurrentVolume + "%",
-            Supported = monitor.SupportsVolume,
-        },
-        "color-temperature" => new CliSettingValue
-        {
-            Setting = "color-temperature",
-            Raw = monitor.CurrentColorTemperature,
-            Display = SetCommand.FormatDiscrete(0x14, monitor.CurrentColorTemperature),
-            Supported = monitor.SupportsColorTemperature,
-        },
-        "input-source" => new CliSettingValue
-        {
-            Setting = "input-source",
-            Raw = monitor.CurrentInputSource,
-            Display = SetCommand.FormatDiscrete(0x60, monitor.CurrentInputSource),
-            Supported = monitor.SupportsInputSource,
-        },
-        "power-state" => new CliSettingValue
-        {
-            Setting = "power-state",
-            Raw = monitor.CurrentPowerState,
-            Display = SetCommand.FormatDiscrete(0xD6, monitor.CurrentPowerState),
-            Supported = monitor.SupportsPowerState,
-        },
-        "orientation" => new CliSettingValue
-        {
-            Setting = "orientation",
-            Raw = SetCommand.OrientationDegreesValue(monitor.Orientation),
-            Display = SetCommand.OrientationDegrees(monitor.Orientation),
-            Supported = !string.IsNullOrEmpty(monitor.GdiDeviceName),
-        },
+        "brightness" => Reading("brightness", monitor.SupportsBrightness, monitor.ReadValues.HasFlag(MonitorReadFlags.Brightness), monitor.CurrentBrightness, v => v + "%"),
+        "contrast" => Reading("contrast", monitor.SupportsContrast, monitor.ReadValues.HasFlag(MonitorReadFlags.Contrast), monitor.CurrentContrast, v => v + "%"),
+        "volume" => Reading("volume", monitor.SupportsVolume, monitor.ReadValues.HasFlag(MonitorReadFlags.Volume), monitor.CurrentVolume, v => v + "%"),
+        "color-temperature" => Reading("color-temperature", monitor.SupportsColorTemperature, monitor.ReadValues.HasFlag(MonitorReadFlags.ColorTemperature), monitor.CurrentColorTemperature, v => SetCommand.FormatDiscrete(0x14, v)),
+        "input-source" => Reading("input-source", monitor.SupportsInputSource, monitor.ReadValues.HasFlag(MonitorReadFlags.InputSource), monitor.CurrentInputSource, v => SetCommand.FormatDiscrete(0x60, v)),
+        "power-state" => Reading("power-state", monitor.SupportsPowerState, monitor.ReadValues.HasFlag(MonitorReadFlags.PowerState), monitor.CurrentPowerState, v => SetCommand.FormatDiscrete(0xD6, v)),
+
+        // raw is the orientation in degrees; the display is derived from the index, so the
+        // formatter ignores its argument rather than treating degrees as an index.
+        "orientation" => Reading("orientation", !string.IsNullOrEmpty(monitor.GdiDeviceName), monitor.ReadValues.HasFlag(MonitorReadFlags.Orientation), SetCommand.OrientationDegreesValue(monitor.Orientation), _ => SetCommand.OrientationDegrees(monitor.Orientation)),
         _ => null,
     };
+
+    /// <summary>
+    /// Projects one setting. The value is reported only when the monitor both supports it and
+    /// discovery actually read it (<see cref="Monitor.ReadValues"/>) — mirroring how <c>set</c>
+    /// reports its "before" value only when known, so a default/stale field (e.g. the 50% seed on
+    /// <c>CurrentContrast</c>) is never passed off as a live reading. <paramref name="supported"/>
+    /// is reported independently so a consumer can tell "monitor can't do this" (supported:false)
+    /// from "couldn't read it" (supported:true, value omitted).
+    /// </summary>
+    private static CliSettingValue Reading(string name, bool supported, bool read, int raw, Func<int, string> format)
+    {
+        var known = supported && read;
+        return new CliSettingValue
+        {
+            Setting = name,
+            Supported = supported,
+            Raw = known ? raw : null,
+            Display = known ? format(raw) : null,
+        };
+    }
 }

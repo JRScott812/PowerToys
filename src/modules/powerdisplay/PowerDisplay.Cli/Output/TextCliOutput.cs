@@ -77,13 +77,11 @@ public sealed class TextCliOutput : ICliOutput
             _stdout.WriteLine($"  id                 {entry.Monitor.Id}");
             foreach (var s in entry.Settings)
             {
-                if (!s.Supported)
-                {
-                    _stdout.WriteLine($"  {s.Setting,-18} (not supported)");
-                    continue;
-                }
-
-                _stdout.WriteLine($"  {s.Setting,-18} {s.Display}");
+                // Three honest states: the monitor can't do it, it can but discovery couldn't read
+                // it, or here's the value.
+                var rendered = !s.Supported ? "(not supported)"
+                    : s.Display ?? "(unknown)";
+                _stdout.WriteLine($"  {s.Setting,-18} {rendered}");
             }
         }
     }
