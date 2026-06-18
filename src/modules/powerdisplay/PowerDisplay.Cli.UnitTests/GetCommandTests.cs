@@ -212,6 +212,20 @@ public class GetCommandTests
     }
 
     [TestMethod]
+    public void TextOutput_EmptyResult_ResolvesLocalizedNoMonitorsString()
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        var writer = new TextCliOutput(stdout, stderr);
+
+        writer.WriteGetResult(new CliGetResult { Monitors = [] });
+
+        // Exercises ResourceManager end-to-end: the string comes from Resources.resx, so a wrong
+        // base name would return the resource key instead and fail this assertion.
+        StringAssert.Contains(stdout.ToString(), "No monitors discovered.");
+    }
+
+    [TestMethod]
     public void TextOutput_RendersProtocolAndIdHeader()
     {
         using var stdout = new StringWriter();

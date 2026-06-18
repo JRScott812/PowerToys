@@ -34,7 +34,7 @@ public sealed class TextCliOutput : ICliOutput
     {
         if (result.Monitors.Count == 0)
         {
-            _stdout.WriteLine("No monitors discovered.");
+            _stdout.WriteLine(PowerDisplay.Cli.Properties.Resources.Text_NoMonitorsDiscovered);
             return;
         }
 
@@ -60,7 +60,7 @@ public sealed class TextCliOutput : ICliOutput
     {
         if (result.Monitors.Count == 0)
         {
-            _stdout.WriteLine("No monitors discovered.");
+            _stdout.WriteLine(PowerDisplay.Cli.Properties.Resources.Text_NoMonitorsDiscovered);
             return;
         }
 
