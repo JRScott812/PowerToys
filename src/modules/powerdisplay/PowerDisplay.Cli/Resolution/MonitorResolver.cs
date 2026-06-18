@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using PowerDisplay.Cli.Errors;
+using PowerDisplay.Cli.Properties;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
 namespace PowerDisplay.Cli.Resolution;
@@ -34,8 +35,8 @@ public static class MonitorResolver
                 {
                     Code = CliErrorCodes.SelectorMissing,
                     ExitCode = CliExitCodes.SelectorMissing,
-                    Message = "one of --monitor-number/-n or --monitor-id/-i is required",
-                    Hint = "run 'powerdisplay list' to see available monitors",
+                    Message = Resources.Error_SelectorMissing,
+                    Hint = Resources.Hint_RunList,
                 },
             };
         }
@@ -43,7 +44,7 @@ public static class MonitorResolver
         string? warning = null;
         if (hasNumber && hasId)
         {
-            warning = $"warning: --monitor-number {monitorNumber.GetValueOrDefault()} ignored because --monitor-id was also provided";
+            warning = Resources.Warn_MonitorNumberIgnored(monitorNumber.GetValueOrDefault());
         }
 
         if (hasId)
@@ -65,8 +66,8 @@ public static class MonitorResolver
                 {
                     Code = CliErrorCodes.MonitorNotFound,
                     ExitCode = CliExitCodes.MonitorNotFound,
-                    Message = $"no monitor found with id '{monitorId}'",
-                    Hint = "run 'powerdisplay list' to see available monitors",
+                    Message = Resources.Error_MonitorNotFoundById(monitorId!),
+                    Hint = Resources.Hint_RunList,
                 },
             };
         }
@@ -86,8 +87,8 @@ public static class MonitorResolver
             {
                 Code = CliErrorCodes.MonitorNotFound,
                 ExitCode = CliExitCodes.MonitorNotFound,
-                Message = $"no monitor found with number {number}",
-                Hint = "run 'powerdisplay list' to see available monitors",
+                Message = Resources.Error_MonitorNotFoundByNumber(number),
+                Hint = Resources.Hint_RunList,
             },
         };
     }

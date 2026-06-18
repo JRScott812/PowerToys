@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
+using PowerDisplay.Cli.Properties;
 using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
 using Monitor = PowerDisplay.Common.Models.Monitor;
@@ -140,8 +141,8 @@ public static class GetCommand
             Code = CliErrorCodes.ArgumentError,
             ExitCode = CliExitCodes.ArgumentError,
             Setting = settingFilter,
-            Message = $"unknown setting '{settingFilter}'",
-            Hint = $"valid settings: {string.Join(", ", AllSettingNames)}",
+            Message = Resources.Error_UnknownSetting(settingFilter),
+            Hint = Resources.Hint_ValidSettings(string.Join(", ", AllSettingNames)),
         };
         return true;
     }

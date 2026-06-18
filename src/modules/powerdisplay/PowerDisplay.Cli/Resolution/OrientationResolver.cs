@@ -4,6 +4,7 @@
 
 using System.Globalization;
 using PowerDisplay.Cli.Errors;
+using PowerDisplay.Cli.Properties;
 
 namespace PowerDisplay.Cli.Resolution;
 
@@ -47,7 +48,7 @@ public static class OrientationResolver
         ExitCode = CliExitCodes.InvalidDiscreteValue,
         Setting = SettingName,
         Requested = raw,
-        Message = $"--orientation value '{raw}' is not accepted; expected one of {string.Join(", ", AcceptedDegrees)}",
-        Hint = "pass the rotation in degrees (0, 90, 180, or 270)",
+        Message = Resources.Error_Orientation(raw, string.Join(", ", AcceptedDegrees)),
+        Hint = Resources.Hint_Orientation,
     };
 }

@@ -62,8 +62,155 @@
     <value>No monitors discovered.</value>
     <comment>Text-mode output when list/get finds no monitors.</comment>
   </data>
+  <data name="Text_NotSupported" xml:space="preserve">
+    <value>(not supported)</value>
+    <comment>Text-mode marker for a setting the monitor does not support.</comment>
+  </data>
+  <data name="Text_Unknown" xml:space="preserve">
+    <value>(unknown)</value>
+    <comment>Text-mode marker for a supported setting whose value was not read.</comment>
+  </data>
+  <data name="Text_Failed" xml:space="preserve">
+    <value>FAILED</value>
+    <comment>Text-mode marker that an apply-profile setting failed at the hardware.</comment>
+  </data>
+  <data name="Text_NotConnectedSkipped" xml:space="preserve">
+    <value>not connected, skipped</value>
+    <comment>apply-profile: a monitor named by the profile is not currently connected.</comment>
+  </data>
+  <data name="Text_NoSettingsInProfile" xml:space="preserve">
+    <value>no settings in profile</value>
+    <comment>apply-profile: the profile entry for a connected monitor had no values.</comment>
+  </data>
+  <data name="Text_OutOfRangeSkipped" xml:space="preserve">
+    <value>(out of range, skipped)</value>
+    <comment>apply-profile: a profile value was outside the valid range and was not written.</comment>
+  </data>
+  <data name="Text_NoProfilesSaved" xml:space="preserve">
+    <value>No profiles saved.</value>
+    <comment>profiles command: no saved profiles exist.</comment>
+  </data>
+  <data name="Text_NoVcpCapabilities" xml:space="preserve">
+    <value>No VCP capabilities reported.</value>
+  </data>
+  <data name="Text_NoValuesReported" xml:space="preserve">
+    <value>(no values reported)</value>
+    <comment>capabilities: a discrete VCP code advertised no enumerated values.</comment>
+  </data>
+  <data name="Text_AppliedProfile" xml:space="preserve">
+    <value>Applied profile '{0}':</value>
+    <comment>{0} = profile name.</comment>
+  </data>
+  <data name="Error_SelectorMissing" xml:space="preserve">
+    <value>one of --monitor-number/-n or --monitor-id/-i is required</value>
+    <comment>The flag names (--monitor-number, -n, --monitor-id, -i) are CLI syntax and must not be translated.</comment>
+  </data>
+  <data name="Error_MonitorNotFoundById" xml:space="preserve">
+    <value>no monitor found with id '{0}'</value>
+    <comment>{0} = monitor id.</comment>
+  </data>
+  <data name="Error_MonitorNotFoundByNumber" xml:space="preserve">
+    <value>no monitor found with number {0}</value>
+    <comment>{0} = monitor number.</comment>
+  </data>
+  <data name="Warn_MonitorNumberIgnored" xml:space="preserve">
+    <value>warning: --monitor-number {0} ignored because --monitor-id was also provided</value>
+    <comment>{0} = monitor number. Flag names are CLI syntax and must not be translated.</comment>
+  </data>
+  <data name="Hint_RunList" xml:space="preserve">
+    <value>run 'powerdisplay list' to see available monitors</value>
+    <comment>'powerdisplay list' is a literal command and must not be translated.</comment>
+  </data>
+  <data name="Error_DiscreteParse" xml:space="preserve">
+    <value>--{0} value '{1}' could not be parsed as a name or hex value</value>
+    <comment>{0} = setting name (CLI syntax, e.g. input-source), {1} = the value the user passed.</comment>
+  </data>
+  <data name="Error_DiscreteUnsupported" xml:space="preserve">
+    <value>--{0} value '{1}' is not in the monitor's supported set</value>
+    <comment>{0} = setting name (CLI syntax), {1} = the value the user passed.</comment>
+  </data>
+  <data name="Hint_DiscreteValue" xml:space="preserve">
+    <value>pass a name from the supported list above, or a raw hex value like 0x11</value>
+    <comment>0x11 is a literal hex example and must not be translated.</comment>
+  </data>
+  <data name="Error_Orientation" xml:space="preserve">
+    <value>--orientation value '{0}' is not accepted; expected one of {1}</value>
+    <comment>{0} = the value the user passed, {1} = comma-separated accepted degrees (0, 90, 180, 270).</comment>
+  </data>
+  <data name="Hint_Orientation" xml:space="preserve">
+    <value>pass the rotation in degrees (0, 90, 180, or 270)</value>
+  </data>
+  <data name="Error_OutOfRange" xml:space="preserve">
+    <value>--{0} value {1} is out of range; expected integer in [{2}, {3}]</value>
+    <comment>{0} = setting name (CLI syntax), {1} = the value, {2} = min, {3} = max.</comment>
+  </data>
+  <data name="Error_NoSettingSpecified" xml:space="preserve">
+    <value>no setting specified; pass one of --brightness/--contrast/--volume/--color-temperature/--input-source/--power-state/--orientation</value>
+    <comment>The flag names are CLI syntax and must not be translated.</comment>
+  </data>
+  <data name="Error_OnlyOneSetting" xml:space="preserve">
+    <value>only one setting may be applied per 'set' call</value>
+    <comment>'set' is a literal command name and must not be translated.</comment>
+  </data>
+  <data name="Hint_OnlyOneSetting" xml:space="preserve">
+    <value>split into multiple invocations: one --&lt;setting&gt; per call</value>
+  </data>
   <data name="Error_UnsupportedAdjustment" xml:space="preserve">
     <value>Monitor {0} ({1}) does not support {2} adjustment</value>
-    <comment>{0}=monitor number, {1}=monitor name, {2}=setting name (invariant, e.g. "contrast").</comment>
+    <comment>{0} = monitor number, {1} = monitor name, {2} = setting name (CLI syntax, e.g. contrast).</comment>
+  </data>
+  <data name="Hint_UnsupportedReason" xml:space="preserve">
+    <value>reason: {0}</value>
+    <comment>{0} = a technical reason string.</comment>
+  </data>
+  <data name="Error_ConfirmPowerOff" xml:space="preserve">
+    <value>refusing to power down or sleep Monitor {0} ({1}) without confirmation</value>
+    <comment>{0} = monitor number, {1} = monitor name.</comment>
+  </data>
+  <data name="Hint_ConfirmPowerOff" xml:space="preserve">
+    <value>re-run with --confirm-power-off to power the display off or put it to sleep</value>
+    <comment>--confirm-power-off is CLI syntax and must not be translated.</comment>
+  </data>
+  <data name="Error_OrientationNoGdi" xml:space="preserve">
+    <value>Monitor {0} ({1}) does not have a GDI device name and cannot be rotated via Windows display settings</value>
+    <comment>{0} = monitor number, {1} = monitor name.</comment>
+  </data>
+  <data name="Error_HardwareWriteFailed" xml:space="preserve">
+    <value>Hardware write failed</value>
+    <comment>Fallback message when the driver returned no detail.</comment>
+  </data>
+  <data name="Error_UnknownSetting" xml:space="preserve">
+    <value>unknown setting '{0}'</value>
+    <comment>{0} = the setting name the user passed to --setting.</comment>
+  </data>
+  <data name="Hint_ValidSettings" xml:space="preserve">
+    <value>valid settings: {0}</value>
+    <comment>{0} = comma-separated canonical setting names (CLI syntax, not translated).</comment>
+  </data>
+  <data name="Error_ProfileNotFound" xml:space="preserve">
+    <value>profile '{0}' not found</value>
+    <comment>{0} = profile name.</comment>
+  </data>
+  <data name="Hint_RunProfiles" xml:space="preserve">
+    <value>run 'powerdisplay profiles' to see available profiles</value>
+    <comment>'powerdisplay profiles' is a literal command and must not be translated.</comment>
+  </data>
+  <data name="Error_TimedOut" xml:space="preserve">
+    <value>operation timed out after {0}s</value>
+    <comment>{0} = number of seconds.</comment>
+  </data>
+  <data name="Error_Cancelled" xml:space="preserve">
+    <value>operation was cancelled</value>
+  </data>
+  <data name="Error_InvalidArguments" xml:space="preserve">
+    <value>invalid arguments</value>
+  </data>
+  <data name="Error_UnexpectedError" xml:space="preserve">
+    <value>unexpected error: {0}</value>
+    <comment>{0} = exception message.</comment>
+  </data>
+  <data name="Error_NegativeTimeout" xml:space="preserve">
+    <value>--timeout must be &gt;= 0 (use 0 to disable the timeout).</value>
+    <comment>--timeout is CLI syntax and must not be translated.</comment>
   </data>
 </root>

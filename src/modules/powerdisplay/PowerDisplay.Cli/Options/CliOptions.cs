@@ -4,6 +4,7 @@
 
 using System.CommandLine;
 using System.Globalization;
+using PowerDisplay.Cli.Properties;
 
 namespace PowerDisplay.Cli.Options;
 
@@ -140,7 +141,7 @@ public static class CliOptions
                 && int.TryParse(result.Tokens[0].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var seconds)
                 && seconds < 0)
             {
-                result.ErrorMessage = "--timeout must be >= 0 (use 0 to disable the timeout).";
+                result.ErrorMessage = Resources.Error_NegativeTimeout;
             }
         });
     }

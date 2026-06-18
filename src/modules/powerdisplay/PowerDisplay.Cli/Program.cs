@@ -16,6 +16,7 @@ using PowerDisplay.Cli.Commands;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Options;
 using PowerDisplay.Cli.Output;
+using PowerDisplay.Cli.Properties;
 using PowerDisplay.Cli.Settings;
 using PowerDisplay.Common.Services;
 
@@ -227,7 +228,7 @@ public static class Program
                 {
                     Code = CliErrorCodes.InternalError,
                     ExitCode = CliExitCodes.InternalError,
-                    Message = $"unexpected error: {ex.Message}",
+                    Message = Resources.Error_UnexpectedError(ex.Message),
                 },
             });
             return CliExitCodes.InternalError;
@@ -274,7 +275,7 @@ public static class Program
             {
                 Code = CliErrorCodes.ArgumentError,
                 ExitCode = CliExitCodes.ArgumentError,
-                Message = combined.Length == 0 ? "invalid arguments" : combined,
+                Message = combined.Length == 0 ? Resources.Error_InvalidArguments : combined,
             },
         };
     }
@@ -289,8 +290,8 @@ public static class Program
                 Code = CliErrorCodes.Timeout,
                 ExitCode = CliExitCodes.Timeout,
                 Message = timedOut
-                    ? $"operation timed out after {timeoutSeconds}s"
-                    : "operation was cancelled",
+                    ? Resources.Error_TimedOut(timeoutSeconds)
+                    : Resources.Error_Cancelled,
             },
         };
 

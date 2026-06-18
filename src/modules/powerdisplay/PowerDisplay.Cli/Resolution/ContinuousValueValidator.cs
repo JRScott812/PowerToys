@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using PowerDisplay.Cli.Errors;
+using PowerDisplay.Cli.Properties;
 
 namespace PowerDisplay.Cli.Resolution;
 
@@ -27,7 +28,7 @@ public static class ContinuousValueValidator
                 Setting = settingName,
                 Requested = value.ToString(System.Globalization.CultureInfo.InvariantCulture),
                 ExpectedRange = $"[{Min}, {Max}]",
-                Message = $"--{settingName} value {value} is out of range; expected integer in [{Min}, {Max}]",
+                Message = Resources.Error_OutOfRange(settingName, value, Min, Max),
             };
         }
 

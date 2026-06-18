@@ -5,6 +5,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using PowerDisplay.Cli.Properties;
 
 namespace PowerDisplay.Cli.Output;
 
@@ -34,7 +35,7 @@ public sealed class TextCliOutput : ICliOutput
     {
         if (result.Monitors.Count == 0)
         {
-            _stdout.WriteLine(PowerDisplay.Cli.Properties.Resources.Text_NoMonitorsDiscovered);
+            _stdout.WriteLine(Resources.Text_NoMonitorsDiscovered);
             return;
         }
 
@@ -60,7 +61,7 @@ public sealed class TextCliOutput : ICliOutput
     {
         if (result.Monitors.Count == 0)
         {
-            _stdout.WriteLine(PowerDisplay.Cli.Properties.Resources.Text_NoMonitorsDiscovered);
+            _stdout.WriteLine(Resources.Text_NoMonitorsDiscovered);
             return;
         }
 
@@ -79,8 +80,8 @@ public sealed class TextCliOutput : ICliOutput
             {
                 // Three honest states: the monitor can't do it, it can but discovery couldn't read
                 // it, or here's the value.
-                var rendered = !s.Supported ? "(not supported)"
-                    : s.Display ?? "(unknown)";
+                var rendered = !s.Supported ? Resources.Text_NotSupported
+                    : s.Display ?? Resources.Text_Unknown;
                 _stdout.WriteLine($"  {s.Setting,-18} {rendered}");
             }
         }
@@ -102,7 +103,7 @@ public sealed class TextCliOutput : ICliOutput
 
         if (result.VcpCodes.Count == 0)
         {
-            _stdout.WriteLine("  No VCP capabilities reported.");
+            _stdout.WriteLine($"  {Resources.Text_NoVcpCapabilities}");
         }
         else
         {
@@ -116,7 +117,7 @@ public sealed class TextCliOutput : ICliOutput
                 else
                 {
                     var values = code.DiscreteValues is null
-                        ? "(no values reported)"
+                        ? Resources.Text_NoValuesReported
                         : string.Join(", ", code.DiscreteValues);
                     _stdout.WriteLine($"    {code.Code} {code.Name}: {values}");
                 }
@@ -133,7 +134,7 @@ public sealed class TextCliOutput : ICliOutput
     {
         if (result.Profiles.Count == 0)
         {
-            _stdout.WriteLine("No profiles saved.");
+            _stdout.WriteLine(Resources.Text_NoProfilesSaved);
             return;
         }
 
@@ -147,19 +148,19 @@ public sealed class TextCliOutput : ICliOutput
 
     public void WriteApplyProfileResult(CliApplyProfileResult result)
     {
-        _stdout.WriteLine($"Applied profile '{result.Profile}':");
+        _stdout.WriteLine(Resources.Text_AppliedProfile(result.Profile));
         foreach (var m in result.Monitors)
         {
             if (!m.Connected)
             {
-                _stdout.WriteLine($"  Monitor {m.Monitor.Id}: not connected, skipped");
+                _stdout.WriteLine($"  Monitor {m.Monitor.Id}: {Resources.Text_NotConnectedSkipped}");
                 continue;
             }
 
             var label = $"Monitor {m.Monitor.Number} ({m.Monitor.Name})";
             if (m.Changes.Count == 0)
             {
-                _stdout.WriteLine($"  {label}: no settings in profile");
+                _stdout.WriteLine($"  {label}: {Resources.Text_NoSettingsInProfile}");
                 continue;
             }
 
@@ -168,9 +169,9 @@ public sealed class TextCliOutput : ICliOutput
                 var detail = c.Status switch
                 {
                     CliProfileChange.StatusApplied => $"{c.Setting} → {c.Display}",
-                    CliProfileChange.StatusUnsupported => $"{c.Setting} (not supported)",
-                    CliProfileChange.StatusOutOfRange => $"{c.Setting} {c.Value} (out of range, skipped)",
-                    CliProfileChange.StatusHardwareFailure => $"{c.Setting} → {c.Value} FAILED ({c.Error})",
+                    CliProfileChange.StatusUnsupported => $"{c.Setting} {Resources.Text_NotSupported}",
+                    CliProfileChange.StatusOutOfRange => $"{c.Setting} {c.Value} {Resources.Text_OutOfRangeSkipped}",
+                    CliProfileChange.StatusHardwareFailure => $"{c.Setting} → {c.Value} {Resources.Text_Failed} ({c.Error})",
                     _ => $"{c.Setting}: {c.Status}",
                 };
                 _stdout.WriteLine($"  {label}: {detail}");

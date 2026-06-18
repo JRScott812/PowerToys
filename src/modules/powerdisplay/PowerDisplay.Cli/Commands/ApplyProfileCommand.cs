@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
+using PowerDisplay.Cli.Properties;
 using PowerDisplay.Cli.Resolution;
 using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
@@ -44,8 +45,8 @@ public static class ApplyProfileCommand
                     Code = CliErrorCodes.ArgumentError,
                     ExitCode = CliExitCodes.ArgumentError,
                     Requested = profileName,
-                    Message = $"profile '{profileName}' not found",
-                    Hint = "run 'powerdisplay profiles' to see available profiles",
+                    Message = Resources.Error_ProfileNotFound(profileName),
+                    Hint = Resources.Hint_RunProfiles,
                 },
             });
             return CliExitCodes.ArgumentError;

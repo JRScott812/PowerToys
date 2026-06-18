@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using PowerDisplay.Cli.Errors;
+using PowerDisplay.Cli.Properties;
 using PowerDisplay.Common.Utils;
 
 namespace PowerDisplay.Cli.Resolution;
@@ -101,8 +102,8 @@ public static class DiscreteValueResolver
             Setting = settingName,
             Requested = raw,
             Supported = BuildSupportedList(vcpCode, supportedValues),
-            Message = $"--{settingName} value '{raw}' could not be parsed as a name or hex value",
-            Hint = "pass a name from the supported list above, or a raw hex value like 0x11",
+            Message = Resources.Error_DiscreteParse(settingName, raw),
+            Hint = Resources.Hint_DiscreteValue,
         };
 
     private static CliError MakeUnsupportedError(
@@ -117,8 +118,8 @@ public static class DiscreteValueResolver
             Setting = settingName,
             Requested = raw,
             Supported = BuildSupportedList(vcpCode, supportedValues),
-            Message = $"--{settingName} value '{raw}' is not in the monitor's supported set",
-            Hint = "pass a name from the supported list above, or a raw hex value like 0x11",
+            Message = Resources.Error_DiscreteUnsupported(settingName, raw),
+            Hint = Resources.Hint_DiscreteValue,
         };
 
     private static IReadOnlyList<CliSupportedValue>? BuildSupportedList(byte vcpCode, IReadOnlyList<int>? values)

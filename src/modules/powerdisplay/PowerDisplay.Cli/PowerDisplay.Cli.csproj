@@ -36,6 +36,9 @@
     <None Remove="*.binlog" />
   </ItemGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="PowerDisplay.Cli.UnitTests" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
   <ItemGroup>

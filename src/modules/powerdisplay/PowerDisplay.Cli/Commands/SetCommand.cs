@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using PowerDisplay.Cli.Errors;
 using PowerDisplay.Cli.Output;
+using PowerDisplay.Cli.Properties;
 using PowerDisplay.Cli.Resolution;
 using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
@@ -36,7 +37,7 @@ public static class SetCommand
                 {
                     Code = CliErrorCodes.ArgumentError,
                     ExitCode = CliExitCodes.ArgumentError,
-                    Message = "no setting specified; pass one of --brightness/--contrast/--volume/--color-temperature/--input-source/--power-state/--orientation",
+                    Message = Resources.Error_NoSettingSpecified,
                 },
             });
             return CliExitCodes.ArgumentError;
@@ -51,8 +52,8 @@ public static class SetCommand
                 {
                     Code = CliErrorCodes.ArgumentError,
                     ExitCode = CliExitCodes.ArgumentError,
-                    Message = "only one setting may be applied per 'set' call",
-                    Hint = "split into multiple invocations: one --<setting> per call",
+                    Message = Resources.Error_OnlyOneSetting,
+                    Hint = Resources.Hint_OnlyOneSetting,
                 },
             });
             return CliExitCodes.ArgumentError;
@@ -295,7 +296,7 @@ public static class SetCommand
         if (!op.IsSuccess)
         {
             return WriteHardwareFailure(
-                output, monitorRef, settingName, requested.ToString(CultureInfo.InvariantCulture), op.ErrorMessage, "Hardware write failed");
+                output, monitorRef, settingName, requested.ToString(CultureInfo.InvariantCulture), op.ErrorMessage, Resources.Error_HardwareWriteFailed);
         }
 
         output.WriteSetResult(new CliSetResult
@@ -359,8 +360,8 @@ public static class SetCommand
                     ExitCode = CliExitCodes.ArgumentError,
                     Setting = confirmationSetting,
                     Requested = raw,
-                    Message = $"refusing to power down or sleep Monitor {monitorRef.Number} ({monitorRef.Name}) without confirmation",
-                    Hint = "re-run with --confirm-power-off to power the display off or put it to sleep",
+                    Message = Resources.Error_ConfirmPowerOff(monitorRef.Number, monitorRef.Name),
+                    Hint = Resources.Hint_ConfirmPowerOff,
                 },
             });
             return CliExitCodes.ArgumentError;
@@ -374,7 +375,7 @@ public static class SetCommand
 
         if (!op.IsSuccess)
         {
-            return WriteHardwareFailure(output, monitorRef, settingName, raw, op.ErrorMessage, "Hardware write failed");
+            return WriteHardwareFailure(output, monitorRef, settingName, raw, op.ErrorMessage, Resources.Error_HardwareWriteFailed);
         }
 
         output.WriteSetResult(new CliSetResult
@@ -408,7 +409,7 @@ public static class SetCommand
                     Code = CliErrorCodes.UnsupportedFeature,
                     ExitCode = CliExitCodes.UnsupportedFeature,
                     Setting = OrientationResolver.SettingName,
-                    Message = $"Monitor {monitorRef.Number} ({monitorRef.Name}) does not have a GDI device name and cannot be rotated via Windows display settings",
+                    Message = Resources.Error_OrientationNoGdi(monitorRef.Number, monitorRef.Name),
                 },
             });
             return CliExitCodes.UnsupportedFeature;
@@ -459,8 +460,8 @@ public static class SetCommand
                 Code = CliErrorCodes.UnsupportedFeature,
                 ExitCode = CliExitCodes.UnsupportedFeature,
                 Setting = settingName,
-                Message = $"Monitor {monitorRef.Number} ({monitorRef.Name}) does not support {settingName} adjustment",
-                Hint = $"reason: {unsupportedReason}",
+                Message = Resources.Error_UnsupportedAdjustment(monitorRef.Number, monitorRef.Name, settingName),
+                Hint = Resources.Hint_UnsupportedReason(unsupportedReason),
             },
         });
         return CliExitCodes.UnsupportedFeature;
