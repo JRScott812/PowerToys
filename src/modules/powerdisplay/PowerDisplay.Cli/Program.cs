@@ -239,7 +239,20 @@ public static class Program
     }
 
     public static bool HasHelpToken(ParseResult parseResult)
-        => parseResult.UnmatchedTokens.Any(t => t is "--help" or "-h" or "-?" or "/?");
+        => parseResult.UnmatchedTokens.Any(IsHelpToken)
+            || HelpBoundToProfileNameArgument(parseResult);
+
+    private static bool IsHelpToken(string token)
+        => token is "--help" or "-h" or "-?" or "/?";
+
+    // The `apply-profile <name>` positional argument greedily captures a "--help" token (it binds to
+    // the argument, so it never reaches UnmatchedTokens). Without this, `apply-profile --help` would
+    // be dispatched as "apply a profile literally named --help" instead of printing help like every
+    // other command. Option *values* that look like help (e.g. `set -i -h`) are unaffected: they are
+    // matched to an option, not to this argument.
+    private static bool HelpBoundToProfileNameArgument(ParseResult parseResult)
+        => parseResult.CommandResult.Command.Name == "apply-profile"
+            && IsHelpToken(parseResult.GetValueForArgument(CliOptions.ProfileName) ?? string.Empty);
 
     public static bool HasVersionToken(ParseResult parseResult)
         => parseResult.UnmatchedTokens.Any(t => t == "--version");

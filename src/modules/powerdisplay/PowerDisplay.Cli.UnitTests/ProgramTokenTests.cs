@@ -31,6 +31,14 @@ public class ProgramTokenTests
         => Assert.IsFalse(Program.HasHelpToken(Parse("set", "-i", "-h", "--brightness", "50")));
 
     [TestMethod]
+    public void HelpUnderApplyProfile_IsDetected()
+        => Assert.IsTrue(Program.HasHelpToken(Parse("apply-profile", "--help")));
+
+    [TestMethod]
+    public void ApplyProfileWithRealName_IsNotHelp()
+        => Assert.IsFalse(Program.HasHelpToken(Parse("apply-profile", "Night")));
+
+    [TestMethod]
     public void VersionFlag_IsDetected()
         => Assert.IsTrue(Program.HasVersionToken(Parse("--version")));
 
