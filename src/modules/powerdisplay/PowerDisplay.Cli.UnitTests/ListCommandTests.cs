@@ -35,6 +35,14 @@ public class ListCommandTests
         {
         }
 
+        public void WriteProfileListResult(CliProfileListResult result)
+        {
+        }
+
+        public void WriteApplyProfileResult(CliApplyProfileResult result)
+        {
+        }
+
         public void WriteError(CliErrorResult result)
         {
         }

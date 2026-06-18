@@ -28,11 +28,15 @@ public sealed partial class PowerDisplayRootCommand : RootCommand
         CapabilitiesCommand = BuildCapabilities();
         GetCommand = BuildGet();
         SetCommand = BuildSet();
+        ProfilesCommand = BuildProfiles();
+        ApplyProfileCommand = BuildApplyProfile();
 
         AddCommand(ListCommand);
         AddCommand(CapabilitiesCommand);
         AddCommand(GetCommand);
         AddCommand(SetCommand);
+        AddCommand(ProfilesCommand);
+        AddCommand(ApplyProfileCommand);
     }
 
     public Command ListCommand { get; }
@@ -42,6 +46,10 @@ public sealed partial class PowerDisplayRootCommand : RootCommand
     public Command GetCommand { get; }
 
     public Command SetCommand { get; }
+
+    public Command ProfilesCommand { get; }
+
+    public Command ApplyProfileCommand { get; }
 
     private static Command BuildList()
     {
@@ -78,6 +86,18 @@ public sealed partial class PowerDisplayRootCommand : RootCommand
         cmd.AddOption(CliOptions.PowerState);
         cmd.AddOption(CliOptions.Orientation);
         cmd.AddOption(CliOptions.ConfirmPowerOff);
+        return cmd;
+    }
+
+    private static Command BuildProfiles()
+    {
+        return new Command("profiles", "List the saved PowerDisplay profiles (name, monitor count, last modified).");
+    }
+
+    private static Command BuildApplyProfile()
+    {
+        var cmd = new Command("apply-profile", "Apply a saved profile's per-monitor settings to the connected monitors.");
+        cmd.AddArgument(CliOptions.ProfileName);
         return cmd;
     }
 }

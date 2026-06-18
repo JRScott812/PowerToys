@@ -121,6 +121,14 @@ public static class CliOptions
         Arity = ArgumentArity.ZeroOrOne,
     };
 
+    // --- apply-profile ---
+    public static readonly Argument<string> ProfileName = new(
+        "name",
+        "Name of the profile to apply (case-insensitive). Run 'powerdisplay profiles' to list them.")
+    {
+        Arity = ArgumentArity.ExactlyOne,
+    };
+
     static CliOptions()
     {
         // Reject a negative --timeout at parse time so it flows through the single ArgumentError

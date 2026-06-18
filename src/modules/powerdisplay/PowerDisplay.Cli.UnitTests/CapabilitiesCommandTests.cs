@@ -41,6 +41,14 @@ public class CapabilitiesCommandTests
 
         public void WriteCapabilitiesResult(CliCapabilitiesResult result) => Caps = result;
 
+        public void WriteProfileListResult(CliProfileListResult result)
+        {
+        }
+
+        public void WriteApplyProfileResult(CliApplyProfileResult result)
+        {
+        }
+
         public void WriteError(CliErrorResult result) => Error = result;
 
         public void WriteWarning(string message)

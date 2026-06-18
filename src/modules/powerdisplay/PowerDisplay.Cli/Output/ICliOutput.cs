@@ -19,6 +19,10 @@ public interface ICliOutput
 
     void WriteCapabilitiesResult(CliCapabilitiesResult result);
 
+    void WriteProfileListResult(CliProfileListResult result);
+
+    void WriteApplyProfileResult(CliApplyProfileResult result);
+
     void WriteError(CliErrorResult result);
 
     void WriteWarning(string message);

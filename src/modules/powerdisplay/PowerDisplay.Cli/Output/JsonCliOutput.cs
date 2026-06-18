@@ -42,6 +42,12 @@ public sealed class JsonCliOutput : ICliOutput
     public void WriteCapabilitiesResult(CliCapabilitiesResult result)
         => _stdout.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliCapabilitiesResult));
 
+    public void WriteProfileListResult(CliProfileListResult result)
+        => _stdout.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliProfileListResult));
+
+    public void WriteApplyProfileResult(CliApplyProfileResult result)
+        => _stdout.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliApplyProfileResult));
+
     public void WriteError(CliErrorResult result)
         => _stderr.WriteLine(JsonSerializer.Serialize(result, CliJsonContext.Default.CliErrorResult));
 

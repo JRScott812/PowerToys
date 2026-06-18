@@ -172,4 +172,79 @@ public class JsonOutputTests
         Assert.IsFalse(codes[0].TryGetProperty("discreteValues", out _)); // null omitted
         Assert.AreEqual("HDMI-1 (0x11)", codes[1].GetProperty("discreteValues")[0].GetString());
     }
+
+    [TestMethod]
+    public void ProfileListResult_HasCamelCaseShape_OnStdout()
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        var json = new JsonCliOutput(stdout, stderr);
+
+        json.WriteProfileListResult(new CliProfileListResult
+        {
+            Profiles =
+            [
+                new CliProfileInfo { Name = "Night", MonitorCount = 2, LastModified = "2026-06-18T00:00:00.0000000Z" },
+            ],
+        });
+
+        var doc = JsonDocument.Parse(stdout.ToString());
+        Assert.AreEqual("1.0", doc.RootElement.GetProperty("version").GetString());
+        Assert.AreEqual("profiles", doc.RootElement.GetProperty("command").GetString());
+        var profiles = doc.RootElement.GetProperty("profiles");
+        Assert.AreEqual("Night", profiles[0].GetProperty("name").GetString());
+        Assert.AreEqual(2, profiles[0].GetProperty("monitorCount").GetInt32());
+        Assert.AreEqual("2026-06-18T00:00:00.0000000Z", profiles[0].GetProperty("lastModified").GetString());
+        Assert.AreEqual(string.Empty, stderr.ToString());
+    }
+
+    [TestMethod]
+    public void ApplyProfileResult_HasCamelCaseShape_AndOmitsDisplayWhenNotApplied()
+    {
+        using var stdout = new StringWriter();
+        using var stderr = new StringWriter();
+        var json = new JsonCliOutput(stdout, stderr);
+
+        json.WriteApplyProfileResult(new CliApplyProfileResult
+        {
+            Profile = "Night",
+            Monitors =
+            [
+                new CliProfileMonitorOutcome
+                {
+                    Monitor = new CliMonitorRef { Number = 1, Id = "A", Name = "Dell", Method = "DDC/CI" },
+                    Connected = true,
+                    Changes =
+                    [
+                        new CliProfileChange { Setting = "brightness", Value = 40, Display = "40%", Status = CliProfileChange.StatusApplied },
+                        new CliProfileChange { Setting = "contrast", Value = 60, Status = CliProfileChange.StatusUnsupported },
+                    ],
+                },
+                new CliProfileMonitorOutcome
+                {
+                    Monitor = new CliMonitorRef { Id = "GONE" },
+                    Connected = false,
+                },
+            ],
+        });
+
+        var doc = JsonDocument.Parse(stdout.ToString());
+        Assert.AreEqual("apply-profile", doc.RootElement.GetProperty("command").GetString());
+        Assert.AreEqual("Night", doc.RootElement.GetProperty("profile").GetString());
+
+        var monitors = doc.RootElement.GetProperty("monitors");
+        Assert.IsTrue(monitors[0].GetProperty("connected").GetBoolean());
+
+        var changes = monitors[0].GetProperty("changes");
+        Assert.AreEqual("brightness", changes[0].GetProperty("setting").GetString());
+        Assert.AreEqual("applied", changes[0].GetProperty("status").GetString());
+        Assert.AreEqual("40%", changes[0].GetProperty("display").GetString());
+
+        // Display is omitted for a change that was not applied.
+        Assert.AreEqual("unsupported", changes[1].GetProperty("status").GetString());
+        Assert.IsFalse(changes[1].TryGetProperty("display", out _));
+
+        Assert.IsFalse(monitors[1].GetProperty("connected").GetBoolean());
+        Assert.AreEqual(string.Empty, stderr.ToString());
+    }
 }

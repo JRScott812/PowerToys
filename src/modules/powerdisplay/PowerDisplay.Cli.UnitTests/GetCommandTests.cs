@@ -43,6 +43,14 @@ public class GetCommandTests
         {
         }
 
+        public void WriteProfileListResult(CliProfileListResult result)
+        {
+        }
+
+        public void WriteApplyProfileResult(CliApplyProfileResult result)
+        {
+        }
+
         public void WriteError(CliErrorResult result) => LastErrorResult = result;
 
         public void WriteWarning(string message) => LastWarning = message;

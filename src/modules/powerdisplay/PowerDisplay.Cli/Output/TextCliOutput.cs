@@ -129,6 +129,55 @@ public sealed class TextCliOutput : ICliOutput
         }
     }
 
+    public void WriteProfileListResult(CliProfileListResult result)
+    {
+        if (result.Profiles.Count == 0)
+        {
+            _stdout.WriteLine("No profiles saved.");
+            return;
+        }
+
+        _stdout.WriteLine($"{"Name",-24} {"Monitors",-9} {"Last modified"}");
+        foreach (var p in result.Profiles)
+        {
+            var name = Truncate(p.Name, 24);
+            _stdout.WriteLine($"{name,-24} {p.MonitorCount,-9} {p.LastModified}");
+        }
+    }
+
+    public void WriteApplyProfileResult(CliApplyProfileResult result)
+    {
+        _stdout.WriteLine($"Applied profile '{result.Profile}':");
+        foreach (var m in result.Monitors)
+        {
+            if (!m.Connected)
+            {
+                _stdout.WriteLine($"  Monitor {m.Monitor.Id}: not connected, skipped");
+                continue;
+            }
+
+            var label = $"Monitor {m.Monitor.Number} ({m.Monitor.Name})";
+            if (m.Changes.Count == 0)
+            {
+                _stdout.WriteLine($"  {label}: no settings in profile");
+                continue;
+            }
+
+            foreach (var c in m.Changes)
+            {
+                var detail = c.Status switch
+                {
+                    CliProfileChange.StatusApplied => $"{c.Setting} → {c.Display}",
+                    CliProfileChange.StatusUnsupported => $"{c.Setting} (not supported)",
+                    CliProfileChange.StatusOutOfRange => $"{c.Setting} {c.Value} (out of range, skipped)",
+                    CliProfileChange.StatusHardwareFailure => $"{c.Setting} → {c.Value} FAILED ({c.Error})",
+                    _ => $"{c.Setting}: {c.Status}",
+                };
+                _stdout.WriteLine($"  {label}: {detail}");
+            }
+        }
+    }
+
     public void WriteError(CliErrorResult result)
     {
         _stderr.WriteLine($"Error: {result.Error.Message}");

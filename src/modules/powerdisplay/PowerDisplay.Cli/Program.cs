@@ -170,6 +170,22 @@ public static class Program
                     return SetCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, inputs, output, cts.Token);
                 }
 
+                if (command == root.ProfilesCommand)
+                {
+                    return Task.FromResult(ProfilesCommand.Run(ProfileService.LoadProfiles(), output));
+                }
+
+                if (command == root.ApplyProfileCommand)
+                {
+                    return ApplyProfileCommand.RunAsync(
+                        monitorManager,
+                        runtime.HiddenMonitorIds,
+                        ProfileService.LoadProfiles(),
+                        parseResult.GetValueForArgument(CliOptions.ProfileName),
+                        output,
+                        cts.Token);
+                }
+
                 return root.InvokeAsync(args);
             }
 
