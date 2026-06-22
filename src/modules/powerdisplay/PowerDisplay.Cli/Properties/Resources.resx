@@ -64,7 +64,7 @@
   </data>
   <data name="Text_NotSupported" xml:space="preserve">
     <value>(not supported)</value>
-    <comment>Text-mode marker for a setting the monitor does not support.</comment>
+    <comment>Text-mode marker for an unsupported setting.</comment>
   </data>
   <data name="Text_Unknown" xml:space="preserve">
     <value>(unknown)</value>
@@ -123,11 +123,11 @@
   </data>
   <data name="Error_DiscreteParse" xml:space="preserve">
     <value>--{0} value '{1}' could not be parsed as a name or hex value</value>
-    <comment>{0} = setting name (CLI syntax, e.g. input-source), {1} = the value the user passed.</comment>
+    <comment>{0} = setting name (CLI syntax, e.g. input-source), {1} = the user's value.</comment>
   </data>
   <data name="Error_DiscreteUnsupported" xml:space="preserve">
     <value>--{0} value '{1}' is not in the monitor's supported set</value>
-    <comment>{0} = setting name (CLI syntax), {1} = the value the user passed.</comment>
+    <comment>{0} = setting name (CLI syntax), {1} = the user's value.</comment>
   </data>
   <data name="Hint_DiscreteValue" xml:space="preserve">
     <value>pass a name from the supported list above, or a raw hex value like 0x11</value>
@@ -135,7 +135,7 @@
   </data>
   <data name="Error_Orientation" xml:space="preserve">
     <value>--orientation value '{0}' is not accepted; expected one of {1}</value>
-    <comment>{0} = the value the user passed, {1} = comma-separated accepted degrees (0, 90, 180, 270).</comment>
+    <comment>{0} = the user's value, {1} = comma-separated accepted degrees (0, 90, 180, 270).</comment>
   </data>
   <data name="Hint_Orientation" xml:space="preserve">
     <value>pass the rotation in degrees (0, 90, 180, or 270)</value>
