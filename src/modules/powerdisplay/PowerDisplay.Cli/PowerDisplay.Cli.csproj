@@ -39,6 +39,14 @@
     <InternalsVisibleTo Include="PowerDisplay.Cli.UnitTests" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Add WindowsDesktop.App framework reference to align System.CodeDom.dll version
+         (pulled in transitively via System.Management) with the other apps, which get it from
+         the WindowsDesktop runtime pack instead of the NuGet package. Without this, the deps.json
+         audit fails because this app ships the older package version of System.CodeDom.dll.
+         This does NOT enable WPF/WinForms, it only ensures consistent runtime DLL versions. -->
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App" />
+  </ItemGroup>
+  <ItemGroup>
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
   <ItemGroup>
