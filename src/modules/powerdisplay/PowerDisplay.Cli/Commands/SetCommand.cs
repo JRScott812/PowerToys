@@ -81,7 +81,7 @@ public static class SetCommand
                 monitor.SupportsBrightness,
                 monitor.CurrentBrightness,
                 monitor.ReadValues.HasFlag(MonitorReadFlags.Brightness),
-                "internal panels and external monitors via DDC/CI",
+                "monitor exposed neither a WMI brightness interface nor DDC/CI brightness (0x10)",
                 (mm, id, v, ct) => mm.SetBrightnessAsync(id, v, ct),
                 output,
                 cancellationToken);
@@ -98,7 +98,7 @@ public static class SetCommand
                 monitor.SupportsContrast,
                 monitor.CurrentContrast,
                 monitor.ReadValues.HasFlag(MonitorReadFlags.Contrast),
-                "internal panel exposes only brightness via WmiMonitorBrightness; DDC/CI capabilities are not available",
+                "monitor's VCP capabilities did not advertise contrast (0x12)",
                 (mm, id, v, ct) => mm.SetContrastAsync(id, v, ct),
                 output,
                 cancellationToken);
