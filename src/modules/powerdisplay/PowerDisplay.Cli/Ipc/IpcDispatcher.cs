@@ -105,20 +105,23 @@ public sealed class IpcDispatcher
         }
 
         // Disambiguation strategy:
-        //   All success DTOs are serialized with "ok":true.
-        //   CliErrorResult is serialized with "ok":false (bool default) and a populated error.code.
-        //   We first try to deserialize as CliErrorResult. If Ok == false (the discriminator),
-        //   we treat it as an error response. Otherwise we delegate to the command-specific
-        //   success-type deserializer.
+        //   Genuine error responses: Ok=false AND error.code is a non-empty CliErrorCodes.* value.
+        //   apply-profile failure DTOs: Ok=false but NO error object (error.code is empty string);
+        //     they carry ExitCode (2 or 5) directly on the CliApplyProfileResult.
+        //   All other success DTOs: Ok=true.
         //
-        // This approach is robust: it does not require the wire to carry a type-discriminator field
-        // because the existing Ok bool already separates the two outcomes, and every success DTO
-        // initializes Ok = true while CliErrorResult leaves Ok at its default (false).
+        //   We try to deserialize as CliErrorResult first. We only treat it as an error if BOTH
+        //   Ok==false AND error.code is non-empty — this prevents misclassifying apply-profile
+        //   Ok=false success DTOs (which deserialize with a default-empty error.code) as errors.
+        //   Every genuine app-side error path sets error.code to a non-empty CliErrorCodes.* value,
+        //   so they still take the error branch. apply-profile failures fall through to the success
+        //   path where SendApplyProfileAsync reads result.ExitCode.
         //
         // TODO(localization): map error Code -> localized message CLI-side instead of rendering
         // app-provided Message. For now we render Message/Hint verbatim (byte-identical to English).
         var errorCandidate = TryDeserializeError(respJson);
-        if (errorCandidate is not null && !errorCandidate.Ok)
+        if (errorCandidate is not null && !errorCandidate.Ok
+            && !string.IsNullOrEmpty(errorCandidate.Error?.Code))
         {
             _output.WriteError(errorCandidate);
             return errorCandidate.Error.ExitCode;

@@ -135,3 +135,48 @@ Tests coverage:
 
 ### Residual uncertainty
 - App and CLI sides (`PowerDisplay`, `PowerDisplay.Cli`) were not compiled — no C++ interop toolchain available. The projector, handler, and dispatcher changes are syntactically correct by static inspection; build+verify on dev box before merging.
+
+## Fix (final review: apply-profile disambiguation)
+
+### Guard change
+
+Old guard (line 121):
+```csharp
+if (errorCandidate is not null && !errorCandidate.Ok)
+```
+
+New guard:
+```csharp
+if (errorCandidate is not null && !errorCandidate.Ok
+    && !string.IsNullOrEmpty(errorCandidate.Error?.Code))
+```
+
+### Null-safety
+
+`CliErrorResult.Error` has initializer `= new()` so it is never null at runtime. The `?.Code` null-conditional is defensive for any future refactor that removes the initializer, and costs nothing.
+
+When a `CliApplyProfileResult` (Ok=false, no error object) is deserialized as `CliErrorResult`, the JSON has no `"error"` key; the deserializer leaves `Error` at its C# default — `new CliError()` with `Code = string.Empty`. The `IsNullOrEmpty` check catches this and correctly skips the error branch.
+
+### Per-command re-trace (all 6 commands correct after fix)
+
+| Command | App response | `Error?.Code` after deser-as-CliErrorResult | Takes error branch? | Exit code source |
+|---|---|---|---|---|
+| list error | `CliErrorResult Ok=false, Code="MONITOR_NOT_FOUND"` | non-empty | YES | `errorCandidate.Error.ExitCode` |
+| get error | `CliErrorResult Ok=false, Code="MONITOR_NOT_FOUND"` | non-empty | YES | `errorCandidate.Error.ExitCode` |
+| set error (validation) | `CliErrorResult Ok=false, Code="ARGUMENT_ERROR"` | non-empty | YES | `errorCandidate.Error.ExitCode` |
+| capabilities error | `CliErrorResult Ok=false, Code="MONITOR_NOT_FOUND"` | non-empty | YES | `errorCandidate.Error.ExitCode` |
+| apply-profile failure (OutOfRange) | `CliApplyProfileResult Ok=false, ExitCode=2, no error.code` | empty string | NO (new) | `result.ExitCode` = 2 ✓ |
+| apply-profile failure (HardwareFailure) | `CliApplyProfileResult Ok=false, ExitCode=5, no error.code` | empty string | NO (new) | `result.ExitCode` = 5 ✓ |
+
+Any success (Ok=true) for any command: `!errorCandidate.Ok` is false → skips error branch regardless of Code. ✓
+
+### App-side error paths lacking Error.Code
+
+None found. Every genuine error response in `CliRequestHandler.cs` and `ProfileDtoProjector.cs` constructs `CliErrorResult` with an explicit `CliErrorCodes.*` constant in `Error.Code`. The `ProviderUnavailable` synthetic error constructed in `IpcDispatcher.WriteProviderUnavailable` also sets `Code = CliErrorCodes.ProviderUnavailable`. No error path leaves `Error.Code` empty.
+
+### Test logical trace
+
+- `ApplyProfile_OutOfRange_partial_failure_exits_2`: response is a `CliApplyProfileResult` serialized via `ContractsJsonContext.Default.CliApplyProfileResult` (Ok=false, ExitCode=2). Deserialized as `CliErrorResult` → `Error.Code = ""` → new guard is false → falls to success path → `Deserialize<CliApplyProfileResult>` → `result.ExitCode = 2` returned. `Assert.AreEqual(2, exit)` passes. `output.StdoutLines.Count == 1` (from `WriteApplyProfileResult`). ✓
+- `ApplyProfile_HardwareFailure_exits_5`: same path, ExitCode=5. `Assert.AreEqual(5, exit)` passes. ✓
+- `Error_response_renders_error_and_returns_its_exit_code`: response is a `CliErrorResult` with `Code="MONITOR_NOT_FOUND"`. New guard: `Code` is non-empty → error branch → `WriteError` → `StderrLines` populated. ✓
+- All existing tests (Ok=true success responses): `!errorCandidate.Ok` is false → skip error branch regardless of empty Code. ✓
