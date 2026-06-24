@@ -83,6 +83,11 @@ public static class ProfileDtoProjector
     /// <param name="outcomes">
     /// Per-monitor outcomes produced by
     /// <see cref="MainViewModel.ApplyProfileWithOutcomesAsync"/>.
+    /// Must NOT be <c>null</c>; a <c>null</c> return from
+    /// <c>ApplyProfileWithOutcomesAsync</c> means "profile not found" and must be
+    /// handled by the IPC handler (Task 2.5) before calling this method — the
+    /// handler returns a <c>CliErrorResult</c> with <c>CliErrorCodes.ArgumentError</c>
+    /// / exit code 7, mirroring <c>ApplyProfileCommand.RunAsync</c>.
     /// </param>
     /// <returns>
     /// A tuple of the DTO to serialize to the IPC caller and the integer exit code the IPC
@@ -117,20 +122,29 @@ public static class ProfileDtoProjector
             }
 
             var changes = new List<CliProfileChange>(outcome.Changes.Count);
-            foreach (var (setting, status) in outcome.Changes)
+            foreach (var change in outcome.Changes)
             {
+                // Populate all CliProfileChange fields to match ApplyProfileCommand.RunAsync:
+                //   Value  — always the raw requested integer (percentage or VCP byte).
+                //   Display — human-readable string only when status is "applied" (e.g. "50%",
+                //             "6500K (0x05)"); null otherwise.
+                //   Error  — hardware error text only when status is "hardware-failure"; null
+                //             otherwise.
                 changes.Add(new CliProfileChange
                 {
-                    Setting = setting,
-                    Status = status,
+                    Setting = change.Setting,
+                    Value = change.Value,
+                    Display = change.Display,
+                    Status = change.Status,
+                    Error = change.Error,
                 });
 
                 // Accumulate worst-outcome flags (mirrors ApplyProfileCommand.Record).
-                if (status == CliProfileChange.StatusHardwareFailure)
+                if (change.Status == CliProfileChange.StatusHardwareFailure)
                 {
                     anyHardwareFailure = true;
                 }
-                else if (status == CliProfileChange.StatusOutOfRange)
+                else if (change.Status == CliProfileChange.StatusOutOfRange)
                 {
                     anyOutOfRange = true;
                 }

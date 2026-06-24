@@ -14,6 +14,7 @@ using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
 using PowerDisplay.Common.Utils;
 using PowerDisplay.Contracts;
+using PowerDisplay.Ipc;
 using PowerDisplay.Models;
 using PowerDisplay.Serialization;
 using PowerDisplay.Services;
@@ -21,6 +22,38 @@ using PowerDisplay.Telemetry.Events;
 using PowerToys.Interop;
 
 namespace PowerDisplay.ViewModels;
+
+/// <summary>
+/// Outcome for a single setting within a <see cref="ProfileApplyOutcome"/>. Carries the same
+/// fields as <see cref="PowerDisplay.Contracts.CliProfileChange"/> so
+/// <c>ProfileDtoProjector.BuildApplyProfileResult</c> can populate every field of the DTO
+/// without re-running hardware operations.
+/// </summary>
+/// <param name="Setting">Canonical setting name (e.g. <c>brightness</c>, <c>color-temperature</c>).</param>
+/// <param name="Value">
+/// The raw integer value from the profile (percentage for continuous settings;
+/// VCP byte for color-temperature). Always populated, regardless of status.
+/// </param>
+/// <param name="Display">
+/// Human-readable applied value (e.g. <c>"50%"</c>, <c>"6500K (0x05)"</c>).
+/// <c>null</c> unless <see cref="Status"/> is <c>applied</c>.
+/// </param>
+/// <param name="Status">
+/// One of <see cref="PowerDisplay.Contracts.CliProfileChange.StatusApplied"/>,
+/// <see cref="PowerDisplay.Contracts.CliProfileChange.StatusUnsupported"/>,
+/// <see cref="PowerDisplay.Contracts.CliProfileChange.StatusOutOfRange"/>,
+/// <see cref="PowerDisplay.Contracts.CliProfileChange.StatusHardwareFailure"/>.
+/// </param>
+/// <param name="Error">
+/// Hardware error message from <c>MonitorOperationResult.ErrorMessage</c>.
+/// <c>null</c> unless <see cref="Status"/> is <c>hardware-failure</c>.
+/// </param>
+public readonly record struct ProfileChangeOutcome(
+    string Setting,
+    int Value,
+    string? Display,
+    string Status,
+    string? Error);
 
 /// <summary>
 /// Per-monitor outcome of applying a profile. Used by IPC callers to build
@@ -33,16 +66,15 @@ namespace PowerDisplay.ViewModels;
 /// writes were attempted).
 /// </param>
 /// <param name="Changes">
-/// Per-setting outcomes. Each tuple carries the canonical setting name (<c>brightness</c>,
-/// <c>contrast</c>, <c>volume</c>, <c>color-temperature</c>) and one of the four status strings
-/// used by <see cref="PowerDisplay.Contracts.CliProfileChange"/>:
-/// <c>applied</c>, <c>unsupported</c>, <c>out-of-range</c>, <c>hardware-failure</c>.
-/// Empty when <see cref="Connected"/> is <c>false</c>.
+/// Per-setting outcomes. Each element is a <see cref="ProfileChangeOutcome"/> carrying the
+/// canonical setting name, the raw value requested, an optional human-readable display string
+/// (present only on success), the status string, and an optional error message (present only
+/// on hardware failure). Empty when <see cref="Connected"/> is <c>false</c>.
 /// </param>
 public readonly record struct ProfileApplyOutcome(
     string MonitorId,
     bool Connected,
-    IReadOnlyList<(string Setting, string Status)> Changes);
+    IReadOnlyList<ProfileChangeOutcome> Changes);
 
 /// <summary>
 /// MainViewModel - Settings UI synchronization and Profile management methods
@@ -115,15 +147,33 @@ public partial class MainViewModel
     /// Outcome-capturing variant of <see cref="TryRestore"/> used by
     /// <see cref="ApplyProfileWithOutcomesInternalAsync"/>. Calls <paramref name="applyAsync"/>
     /// directly on the monitor manager (returning a <see cref="MonitorOperationResult"/>) so that
-    /// hardware failures are captured rather than swallowed. Returns the status string
-    /// (<c>applied</c>/<c>unsupported</c>/<c>out-of-range</c>/<c>hardware-failure</c>) for
-    /// one setting, or <c>null</c> when the setting was not present in the profile entry.
+    /// hardware failures are captured rather than swallowed. Returns a
+    /// <see cref="ProfileChangeOutcome"/> (with <c>Value</c>, optional <c>Display</c>, status,
+    /// and optional <c>Error</c>) for one setting, or <c>null</c> when the setting was not
+    /// present in the profile entry.
     /// </summary>
-    private static async Task<(string Setting, string Status)?> TryRestoreWithOutcomeAsync(
+    /// <param name="savedValue">Profile value for this setting; <c>null</c> means not included.</param>
+    /// <param name="supportsHardware">
+    /// Hardware-capability flag from the underlying <c>Monitor</c> model (e.g.
+    /// <c>monitorVm.SupportsBrightness</c>). Must NOT be a UI-visibility flag
+    /// (<c>ShowBrightness</c>) — a setting that the user has hidden in the GUI but the
+    /// hardware actually supports must still report <c>applied</c>, matching
+    /// <c>ApplyProfileCommand.ApplyContinuousAsync</c>.
+    /// </param>
+    /// <param name="settingName">Canonical setting name for the outcome row.</param>
+    /// <param name="monitorId">Monitor identifier forwarded to <paramref name="applyAsync"/>.</param>
+    /// <param name="formatDisplay">
+    /// Formatter for the human-readable display string when the write succeeds
+    /// (e.g. <c>v =&gt; v + "%"</c> for percentage settings,
+    /// <c>v =&gt; MonitorDtoProjector.FormatDiscrete(0x14, v)</c> for color-temperature).
+    /// </param>
+    /// <param name="applyAsync">Hardware-write delegate returning a <see cref="MonitorOperationResult"/>.</param>
+    private static async Task<ProfileChangeOutcome?> TryRestoreWithOutcomeAsync(
         int? savedValue,
-        bool isVisible,
+        bool supportsHardware,
         string settingName,
         string monitorId,
+        Func<int, string?> formatDisplay,
         Func<string, int, CancellationToken, Task<MonitorOperationResult>> applyAsync)
     {
         if (!savedValue.HasValue)
@@ -132,35 +182,44 @@ public partial class MainViewModel
             return null;
         }
 
-        if (!isVisible)
+        int value = savedValue.Value;
+
+        if (!supportsHardware)
         {
-            // Monitor doesn't support (or has disabled) this setting.
-            return (settingName, CliProfileChange.StatusUnsupported);
+            // Hardware does not support this setting — report unsupported regardless of whether
+            // it is hidden in the GUI (matches ApplyProfileCommand.ApplyContinuousAsync check on
+            // monitor.SupportsBrightness / SupportsContrast / SupportsVolume / SupportsColorTemperature).
+            return new ProfileChangeOutcome(settingName, value, Display: null, CliProfileChange.StatusUnsupported, Error: null);
         }
 
         // Basic range guard matching ApplyProfileCommand.ApplyContinuousAsync (0–100 for
         // percentage-based settings; 0x00–0xFF for VCP color-temperature).
         // color-temperature is the only non-percentage setting in profiles; it uses VCP byte range.
         bool outOfRange = settingName == "color-temperature"
-            ? savedValue.Value is < 0 or > 0xFF
-            : savedValue.Value is < 0 or > 100;
+            ? value is < 0 or > 0xFF
+            : value is < 0 or > 100;
 
         if (outOfRange)
         {
-            return (settingName, CliProfileChange.StatusOutOfRange);
+            return new ProfileChangeOutcome(settingName, value, Display: null, CliProfileChange.StatusOutOfRange, Error: null);
         }
 
         try
         {
-            var result = await applyAsync(monitorId, savedValue.Value, default);
-            return result.IsSuccess
-                ? (settingName, CliProfileChange.StatusApplied)
-                : (settingName, CliProfileChange.StatusHardwareFailure);
+            var result = await applyAsync(monitorId, value, default);
+            if (result.IsSuccess)
+            {
+                return new ProfileChangeOutcome(settingName, value, Display: formatDisplay(value), CliProfileChange.StatusApplied, Error: null);
+            }
+            else
+            {
+                return new ProfileChangeOutcome(settingName, value, Display: null, CliProfileChange.StatusHardwareFailure, Error: result.ErrorMessage);
+            }
         }
         catch (Exception ex)
         {
             Logger.LogWarning($"[Profile] Hardware write failed for {settingName}: {ex.Message}");
-            return (settingName, CliProfileChange.StatusHardwareFailure);
+            return new ProfileChangeOutcome(settingName, value, Display: null, CliProfileChange.StatusHardwareFailure, Error: ex.Message);
         }
     }
 
@@ -277,9 +336,15 @@ public partial class MainViewModel
     /// <see cref="ProfileApplyOutcome.Connected"/> is <c>false</c> for monitors not currently
     /// visible; otherwise <see cref="ProfileApplyOutcome.Changes"/> contains one entry per
     /// setting that was present in the profile entry.
-    /// Returns an empty list when the profile is not found.
+    /// <para>
+    /// Returns <c>null</c> when the profile name is unknown (not found or invalid).
+    /// The IPC handler (Task 2.5) maps <c>null</c> to a
+    /// <see cref="PowerDisplay.Contracts.CliErrorResult"/> with
+    /// <c>CliErrorCodes.ArgumentError</c> / <c>CliExitCodes.ArgumentError</c> (exit code 7),
+    /// mirroring <c>ApplyProfileCommand.RunAsync</c>.
+    /// </para>
     /// </returns>
-    public async Task<IReadOnlyList<ProfileApplyOutcome>> ApplyProfileWithOutcomesAsync(string profileName)
+    public async Task<IReadOnlyList<ProfileApplyOutcome>?> ApplyProfileWithOutcomesAsync(string profileName)
     {
         try
         {
@@ -291,7 +356,7 @@ public partial class MainViewModel
             if (profile == null || !profile.IsValid())
             {
                 Logger.LogWarning($"[Profile] Profile '{profileName}' not found or invalid (outcomes path)");
-                return Array.Empty<ProfileApplyOutcome>();
+                return null;
             }
 
             var outcomes = await ApplyProfileWithOutcomesInternalAsync(profile.MonitorSettings);
@@ -467,11 +532,20 @@ public partial class MainViewModel
             // We call _monitorManager directly (rather than MonitorViewModel.SetXxxAsync) so that
             // MonitorOperationResult.IsSuccess is available to distinguish applied vs hardware-failure.
             // MonitorViewModel UI state is NOT updated here — this path is IPC-only.
+            //
+            // IMPORTANT: Use the hardware-capability flags (monitorVm.SupportsBrightness etc.),
+            // NOT the UI-visibility flags (monitorVm.ShowBrightness etc.). A setting that is
+            // hidden in the Settings UI but physically supported by the hardware must still
+            // report "applied", matching ApplyProfileCommand.ApplyContinuousAsync behavior.
             var monitorId = monitorVm.Id;
-            var changes = new List<(string Setting, string Status)>(4);
+            var changes = new List<ProfileChangeOutcome>(4);
 
             var brightnessOutcome = await TryRestoreWithOutcomeAsync(
-                setting.Brightness, monitorVm.ShowBrightness, "brightness", monitorId,
+                setting.Brightness,
+                monitorVm.SupportsBrightness,
+                "brightness",
+                monitorId,
+                v => v + "%",
                 _monitorManager.SetBrightnessAsync);
             if (brightnessOutcome.HasValue)
             {
@@ -479,7 +553,11 @@ public partial class MainViewModel
             }
 
             var contrastOutcome = await TryRestoreWithOutcomeAsync(
-                setting.Contrast, monitorVm.ShowContrast, "contrast", monitorId,
+                setting.Contrast,
+                monitorVm.SupportsContrast,
+                "contrast",
+                monitorId,
+                v => v + "%",
                 _monitorManager.SetContrastAsync);
             if (contrastOutcome.HasValue)
             {
@@ -487,7 +565,11 @@ public partial class MainViewModel
             }
 
             var volumeOutcome = await TryRestoreWithOutcomeAsync(
-                setting.Volume, monitorVm.ShowVolume, "volume", monitorId,
+                setting.Volume,
+                monitorVm.SupportsVolume,
+                "volume",
+                monitorId,
+                v => v + "%",
                 _monitorManager.SetVolumeAsync);
             if (volumeOutcome.HasValue)
             {
@@ -495,7 +577,11 @@ public partial class MainViewModel
             }
 
             var colorTempOutcome = await TryRestoreWithOutcomeAsync(
-                setting.ColorTemperatureVcp, monitorVm.ShowColorTemperature, "color-temperature", monitorId,
+                setting.ColorTemperatureVcp,
+                monitorVm.SupportsColorTemperature,
+                "color-temperature",
+                monitorId,
+                v => MonitorDtoProjector.FormatDiscrete(0x14, v),
                 _monitorManager.SetColorTemperatureAsync);
             if (colorTempOutcome.HasValue)
             {
