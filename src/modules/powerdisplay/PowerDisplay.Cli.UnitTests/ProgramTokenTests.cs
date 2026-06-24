@@ -62,7 +62,7 @@ public class ProgramTokenTests
     public void BuildParseErrorResult_CollapsesMultipleMessagesIntoOneEnvelope()
     {
         // System.CommandLine can report several errors for one bad invocation; they must be
-        // collapsed into a single envelope so --json stays one parseable object.
+        // collapsed into a single envelope so consumers receive one parseable object.
         var messages = new[] { "first problem", "second problem" };
         var result = Program.BuildParseErrorResult("set", messages);
 

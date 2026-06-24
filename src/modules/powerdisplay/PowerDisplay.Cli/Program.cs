@@ -51,8 +51,8 @@ public static class Program
         if (parseResult.Errors.Count > 0)
         {
             // System.CommandLine can report several parse errors for one bad invocation; collapse
-            // them into a single envelope so --json consumers always receive exactly one parseable
-            // object (and text consumers a single Error line) instead of N concatenated ones.
+            // them into a single envelope so consumers always receive exactly one parseable
+            // object (text output) instead of N concatenated ones.
             output.WriteError(BuildParseErrorResult(
                 parseResult.CommandResult.Command.Name,
                 parseResult.Errors.Select(e => e.Message)));
@@ -362,8 +362,8 @@ public static class Program
     {
         try
         {
-            // UTF-8 without a BOM: a leading BOM in redirected/piped output would corrupt --json
-            // for consumers that don't strip it (e.g. some JSON parsers and shells).
+            // UTF-8 without a BOM: a leading BOM in redirected/piped output can confuse some
+            // consumers that don't strip it (e.g. some parsers and shells).
             Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
         }
         catch (IOException)
