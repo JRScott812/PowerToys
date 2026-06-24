@@ -42,6 +42,11 @@ public class RoundTripTests
                 Code = CliErrorCodes.ProviderUnavailable,
                 ExitCode = CliExitCodes.ProviderUnavailable,
                 Message = "PowerDisplay is not running.",
+                Supported = new List<CliSupportedValue>
+                {
+                    new CliSupportedValue { Name = "DVI", Vcp = "60" },
+                    new CliSupportedValue { Name = "HDMI-1", Vcp = "61" },
+                },
             },
         };
 
@@ -51,6 +56,11 @@ public class RoundTripTests
         Assert.IsNotNull(back);
         Assert.AreEqual(CliExitCodes.ProviderUnavailable, back!.Error!.ExitCode);
         Assert.AreEqual("PROVIDER_UNAVAILABLE", back.Error.Code);
+        Assert.IsNotNull(back.Error.Supported);
+        Assert.AreEqual(2, back.Error.Supported!.Count);
+        Assert.AreEqual("DVI", back.Error.Supported[0].Name);
+        Assert.AreEqual("60", back.Error.Supported[0].Vcp);
+        Assert.AreEqual("HDMI-1", back.Error.Supported[1].Name);
     }
 
     [TestMethod]
@@ -176,6 +186,7 @@ public class RoundTripTests
         Assert.IsTrue(back!.Ok);
         Assert.AreEqual("capabilities", back.Command);
         Assert.AreEqual("DDC/CI", back.CommunicationMethod);
+        Assert.AreEqual(result.RawCapabilities, back.RawCapabilities);
         Assert.AreEqual("U2722D", back.Model);
         Assert.AreEqual("2.1", back.MccsVersion);
         Assert.AreEqual(2, back.VcpCodes.Count);
@@ -254,5 +265,92 @@ public class RoundTripTests
         Assert.AreEqual(CliProfileChange.StatusUnsupported, back.Monitors[0].Changes[1].Status);
         Assert.IsFalse(back.Monitors[1].Connected);
         Assert.AreEqual(0, back.Monitors[1].Changes.Count);
+    }
+
+    [TestMethod]
+    public void ListRequest_envelope_round_trips_through_source_gen()
+    {
+        var envelope = new CliRequestEnvelope
+        {
+            Command = CliCommandNames.List,
+            List = new ListRequest(),
+        };
+
+        var json = JsonSerializer.Serialize(envelope, ContractsJsonContext.Default.CliRequestEnvelope);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliRequestEnvelope);
+
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CliCommandNames.List, back!.Command);
+        Assert.IsNotNull(back.List);
+    }
+
+    [TestMethod]
+    public void GetRequest_envelope_round_trips_through_source_gen()
+    {
+        var envelope = new CliRequestEnvelope
+        {
+            Command = CliCommandNames.Get,
+            Get = new GetRequest { MonitorNumber = 2, SettingFilter = "brightness" },
+        };
+
+        var json = JsonSerializer.Serialize(envelope, ContractsJsonContext.Default.CliRequestEnvelope);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliRequestEnvelope);
+
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CliCommandNames.Get, back!.Command);
+        Assert.AreEqual(2, back.Get!.MonitorNumber);
+        Assert.AreEqual("brightness", back.Get.SettingFilter);
+    }
+
+    [TestMethod]
+    public void CapabilitiesRequest_envelope_round_trips_through_source_gen()
+    {
+        var envelope = new CliRequestEnvelope
+        {
+            Command = CliCommandNames.Capabilities,
+            Capabilities = new CapabilitiesRequest { MonitorNumber = 1, MonitorId = "MON1" },
+        };
+
+        var json = JsonSerializer.Serialize(envelope, ContractsJsonContext.Default.CliRequestEnvelope);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliRequestEnvelope);
+
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CliCommandNames.Capabilities, back!.Command);
+        Assert.AreEqual(1, back.Capabilities!.MonitorNumber);
+        Assert.AreEqual("MON1", back.Capabilities.MonitorId);
+    }
+
+    [TestMethod]
+    public void ProfilesRequest_envelope_round_trips_through_source_gen()
+    {
+        var envelope = new CliRequestEnvelope
+        {
+            Command = CliCommandNames.Profiles,
+            Profiles = new ProfilesRequest(),
+        };
+
+        var json = JsonSerializer.Serialize(envelope, ContractsJsonContext.Default.CliRequestEnvelope);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliRequestEnvelope);
+
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CliCommandNames.Profiles, back!.Command);
+        Assert.IsNotNull(back.Profiles);
+    }
+
+    [TestMethod]
+    public void ApplyProfileRequest_envelope_round_trips_through_source_gen()
+    {
+        var envelope = new CliRequestEnvelope
+        {
+            Command = CliCommandNames.ApplyProfile,
+            ApplyProfile = new ApplyProfileRequest { ProfileName = "Gaming" },
+        };
+
+        var json = JsonSerializer.Serialize(envelope, ContractsJsonContext.Default.CliRequestEnvelope);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliRequestEnvelope);
+
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CliCommandNames.ApplyProfile, back!.Command);
+        Assert.AreEqual("Gaming", back.ApplyProfile!.ProfileName);
     }
 }
