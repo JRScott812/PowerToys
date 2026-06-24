@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
@@ -18,7 +16,6 @@ namespace PowerDisplay.Ipc.UnitTests;
 public class ProfileDtoProjectorTests
 {
     // ─── BuildProfileListResult ──────────────────────────────────────────────
-
     [TestMethod]
     public void BuildProfileListResult_EmptyProfiles_ReturnsEmptyList()
     {
@@ -56,6 +53,7 @@ public class ProfileDtoProjectorTests
         var info = result.Profiles[0];
         Assert.AreEqual("Night", info.Name);
         Assert.AreEqual(2, info.MonitorCount);
+
         // ISO 8601 round-trip ("o") format, invariant culture — mirrors ProfilesCommand.Run
         Assert.AreEqual(lastModified.ToString("o", System.Globalization.CultureInfo.InvariantCulture), info.LastModified);
     }
@@ -68,7 +66,6 @@ public class ProfileDtoProjectorTests
     }
 
     // ─── BuildApplyProfileResult — exit-code aggregation ─────────────────────
-
     [TestMethod]
     public void BuildApplyProfileResult_AllApplied_ExitCodeOk()
     {
@@ -166,7 +163,6 @@ public class ProfileDtoProjectorTests
     }
 
     // ─── BuildApplyProfileResult — unconnected monitor ────────────────────────
-
     [TestMethod]
     public void BuildApplyProfileResult_UnconnectedMonitor_ConnectedFalseNoChanges()
     {
@@ -212,7 +208,6 @@ public class ProfileDtoProjectorTests
     }
 
     // ─── BuildApplyProfileResult — DTO field correctness ────────────────────
-
     [TestMethod]
     public void BuildApplyProfileResult_ChangeRowsCarrySettingAndStatus()
     {
@@ -359,7 +354,6 @@ public class ProfileDtoProjectorTests
     }
 
     // ─── not-found signal (for Task 2.5 / IPC handler) ───────────────────────
-
     /// <summary>
     /// [UNVERIFIED] Documents the contract: ApplyProfileWithOutcomesAsync returns null when the
     /// profile name is unknown. BuildApplyProfileResult must NOT be called with null — the IPC

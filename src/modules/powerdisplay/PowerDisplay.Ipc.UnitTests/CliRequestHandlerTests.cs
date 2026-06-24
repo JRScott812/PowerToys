@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
@@ -35,7 +33,6 @@ namespace PowerDisplay.Ipc.UnitTests;
 public class CliRequestHandlerTests
 {
     // ─── Shared fixtures ──────────────────────────────────────────────────────
-
     private static readonly IReadOnlySet<string> NoHidden =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -121,7 +118,6 @@ public class CliRequestHandlerTests
     }
 
     // ─── list command ─────────────────────────────────────────────────────────
-
     [TestMethod]
     public async Task List_ReturnsCliListResult()
     {
@@ -137,7 +133,6 @@ public class CliRequestHandlerTests
     }
 
     // ─── get command ──────────────────────────────────────────────────────────
-
     [TestMethod]
     public async Task Get_NoSelector_ReturnsAllMonitors()
     {
@@ -175,7 +170,6 @@ public class CliRequestHandlerTests
     }
 
     // ─── set command ──────────────────────────────────────────────────────────
-
     [TestMethod]
     public async Task Set_ValidBrightness_ReturnsCliSetResult()
     {
@@ -217,7 +211,6 @@ public class CliRequestHandlerTests
     }
 
     // ─── capabilities command ─────────────────────────────────────────────────
-
     [TestMethod]
     public async Task Capabilities_SelectorMissing_ReturnsErrorResult()
     {
@@ -254,7 +247,6 @@ public class CliRequestHandlerTests
     }
 
     // ─── profiles command ─────────────────────────────────────────────────────
-
     [TestMethod]
     public async Task Profiles_ReturnsCliProfileListResult()
     {
@@ -278,7 +270,6 @@ public class CliRequestHandlerTests
     }
 
     // ─── apply-profile command ────────────────────────────────────────────────
-
     [TestMethod]
     public async Task ApplyProfile_FoundProfile_ReturnsCliApplyProfileResult()
     {
@@ -346,7 +337,6 @@ public class CliRequestHandlerTests
     }
 
     // ─── unknown command ──────────────────────────────────────────────────────
-
     [TestMethod]
     public async Task UnknownCommand_ReturnsInternalError()
     {

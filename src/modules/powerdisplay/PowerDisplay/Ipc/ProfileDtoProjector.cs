@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
@@ -39,10 +37,7 @@ public static class ProfileDtoProjector
     /// <param name="profiles">The loaded profiles collection (may be empty; must not be null).</param>
     public static CliProfileListResult BuildProfileListResult(PowerDisplayProfiles profiles)
     {
-        if (profiles is null)
-        {
-            throw new ArgumentNullException(nameof(profiles));
-        }
+        ArgumentNullException.ThrowIfNull(profiles);
 
         var infos = new List<CliProfileInfo>(profiles.Profiles.Count);
         foreach (var profile in profiles.Profiles)
@@ -97,10 +92,7 @@ public static class ProfileDtoProjector
         string profileName,
         IReadOnlyList<ProfileApplyOutcome> outcomes)
     {
-        if (outcomes is null)
-        {
-            throw new ArgumentNullException(nameof(outcomes));
-        }
+        ArgumentNullException.ThrowIfNull(outcomes);
 
         var monitorOutcomes = new List<CliProfileMonitorOutcome>(outcomes.Count);
         var anyHardwareFailure = false;

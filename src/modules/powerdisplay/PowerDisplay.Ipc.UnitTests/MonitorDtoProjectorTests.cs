@@ -1,13 +1,11 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using PowerDisplay.Contracts;
 using PowerDisplay.Common.Models;
+using PowerDisplay.Contracts;
 using PowerDisplay.Ipc;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
@@ -17,7 +15,6 @@ namespace PowerDisplay.Ipc.UnitTests;
 public class MonitorDtoProjectorTests
 {
     // ─── Helpers ──────────────────────────────────────────────────────────────
-
     private static readonly IReadOnlySet<string> EmptyHidden =
         new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
@@ -36,7 +33,6 @@ public class MonitorDtoProjectorTests
         };
 
     // ─── ExcludeHidden ────────────────────────────────────────────────────────
-
     [TestMethod]
     public void BuildListResult_ExcludesHiddenMonitors()
     {
@@ -83,7 +79,6 @@ public class MonitorDtoProjectorTests
     }
 
     // ─── List entry projection ────────────────────────────────────────────────
-
     [TestMethod]
     public void BuildListResult_SupportsOrientationTrueWhenGdiNamePresent()
     {
@@ -126,7 +121,6 @@ public class MonitorDtoProjectorTests
     }
 
     // ─── BuildGetResult — no selector path ───────────────────────────────────
-
     [TestMethod]
     public void BuildGetResult_NoSelector_ReturnsAllVisibleMonitors()
     {
@@ -177,7 +171,6 @@ public class MonitorDtoProjectorTests
     }
 
     // ─── BuildGetResult — selected path ──────────────────────────────────────
-
     [TestMethod]
     public void BuildGetResult_UnknownMonitorNumber_YieldsMonitorNotFound()
     {
@@ -253,7 +246,6 @@ public class MonitorDtoProjectorTests
     }
 
     // ─── BuildGetResult — setting projection ─────────────────────────────────
-
     [TestMethod]
     public void BuildGetResult_AllSettingsPresent_CountMatchesAllSettingNames()
     {
@@ -350,7 +342,6 @@ public class MonitorDtoProjectorTests
     }
 
     // ─── BuildCapabilitiesResult ──────────────────────────────────────────────
-
     [TestMethod]
     public void BuildCapabilitiesResult_NoSelector_YieldsSelectorMissing()
     {
@@ -406,6 +397,7 @@ public class MonitorDtoProjectorTests
     {
         var monitor = MakeMon(1, "A");
         var caps = new VcpCapabilities();
+
         // Add brightness (continuous) and color-temperature (discrete with known values)
         caps.SupportedVcpCodes[0x10] = new VcpCodeInfo(0x10, "Brightness");
         caps.SupportedVcpCodes[0x14] = new VcpCodeInfo(0x14, "Select Color Preset", new List<int> { 0x05 });
@@ -427,12 +419,12 @@ public class MonitorDtoProjectorTests
         Assert.IsFalse(colorTemp.Continuous);
         Assert.IsNotNull(colorTemp.DiscreteValues);
         Assert.AreEqual(1, colorTemp.DiscreteValues!.Count);
+
         // FormatDiscrete(0x14, 0x05) → "6500K (0x05)"
         Assert.AreEqual("6500K (0x05)", colorTemp.DiscreteValues[0]);
     }
 
     // ─── ResolveMonitor ───────────────────────────────────────────────────────
-
     [TestMethod]
     public void ResolveMonitor_NoSelector_ReturnsSelectorMissing()
     {
@@ -494,7 +486,6 @@ public class MonitorDtoProjectorTests
     }
 
     // ─── FormatDiscrete / OrientationDegrees ─────────────────────────────────
-
     [TestMethod]
     public void FormatDiscrete_KnownValue_ReturnsNameAndHex()
     {

@@ -1,18 +1,16 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
-using PowerDisplay.Contracts;
 using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
 using PowerDisplay.Common.Utils;
+using PowerDisplay.Contracts;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
 namespace PowerDisplay.Ipc;
@@ -62,7 +60,7 @@ public static class SetCommandExecutor
         var visible = MonitorDtoProjector.ExcludeHidden(snapshot, hidden);
 
         // --- 2. Resolve the target monitor ---
-        var (monitor, _warning, resolveError) = MonitorDtoProjector.ResolveMonitor(visible, req.MonitorNumber, req.MonitorId);
+        var (monitor, _, resolveError) = MonitorDtoProjector.ResolveMonitor(visible, req.MonitorNumber, req.MonitorId);
         if (resolveError is not null)
         {
             return (null, new CliErrorResult { Command = "set", Error = resolveError });
@@ -182,6 +180,7 @@ public static class SetCommandExecutor
                         Code = CliErrorCodes.ArgumentError,
                         ExitCode = CliExitCodes.ArgumentError,
                         Setting = req.Setting,
+
                         // TODO(M4): app should set Code-only; CLI maps Code->localized message
                         Message = string.Format(CultureInfo.InvariantCulture, "unknown setting '{0}'", req.Setting),
                         Hint = string.Format(
@@ -194,7 +193,6 @@ public static class SetCommandExecutor
     }
 
     // ─── Continuous settings (brightness / contrast / volume) ─────────────────
-
     private static async Task<(CliSetResult? Result, CliErrorResult? Error)> ApplyContinuousAsync(
         IMonitorManager manager,
         Monitor monitor,
@@ -262,7 +260,6 @@ public static class SetCommandExecutor
     }
 
     // ─── Discrete settings (color-temperature / input-source / power-state) ───
-
     private static async Task<(CliSetResult? Result, CliErrorResult? Error)> ApplyDiscreteAsync(
         IMonitorManager manager,
         Monitor monitor,
@@ -340,7 +337,6 @@ public static class SetCommandExecutor
     }
 
     // ─── Orientation ──────────────────────────────────────────────────────────
-
     private static async Task<(CliSetResult? Result, CliErrorResult? Error)> ApplyOrientationAsync(
         IMonitorManager manager,
         Monitor monitor,
@@ -555,7 +551,6 @@ public static class SetCommandExecutor
     }
 
     // ─── Shared CliError factory helpers ─────────────────────────────────────
-
     private static CliErrorResult MakeUnsupportedError(CliMonitorRef monitorRef, string settingName, string unsupportedReason)
     {
         // TODO(M4): app should set Code-only; CLI maps Code->localized message

@@ -24,59 +24,6 @@ using PowerToys.Interop;
 namespace PowerDisplay.ViewModels;
 
 /// <summary>
-/// Outcome for a single setting within a <see cref="ProfileApplyOutcome"/>. Carries the same
-/// fields as <see cref="PowerDisplay.Contracts.CliProfileChange"/> so
-/// <c>ProfileDtoProjector.BuildApplyProfileResult</c> can populate every field of the DTO
-/// without re-running hardware operations.
-/// </summary>
-/// <param name="Setting">Canonical setting name (e.g. <c>brightness</c>, <c>color-temperature</c>).</param>
-/// <param name="Value">
-/// The raw integer value from the profile (percentage for continuous settings;
-/// VCP byte for color-temperature). Always populated, regardless of status.
-/// </param>
-/// <param name="Display">
-/// Human-readable applied value (e.g. <c>"50%"</c>, <c>"6500K (0x05)"</c>).
-/// <c>null</c> unless <see cref="Status"/> is <c>applied</c>.
-/// </param>
-/// <param name="Status">
-/// One of <see cref="PowerDisplay.Contracts.CliProfileChange.StatusApplied"/>,
-/// <see cref="PowerDisplay.Contracts.CliProfileChange.StatusUnsupported"/>,
-/// <see cref="PowerDisplay.Contracts.CliProfileChange.StatusOutOfRange"/>,
-/// <see cref="PowerDisplay.Contracts.CliProfileChange.StatusHardwareFailure"/>.
-/// </param>
-/// <param name="Error">
-/// Hardware error message from <c>MonitorOperationResult.ErrorMessage</c>.
-/// <c>null</c> unless <see cref="Status"/> is <c>hardware-failure</c>.
-/// </param>
-public readonly record struct ProfileChangeOutcome(
-    string Setting,
-    int Value,
-    string? Display,
-    string Status,
-    string? Error);
-
-/// <summary>
-/// Per-monitor outcome of applying a profile. Used by IPC callers to build
-/// <see cref="PowerDisplay.Contracts.CliApplyProfileResult"/> without re-running hardware operations.
-/// </summary>
-/// <param name="MonitorId">The monitor's unique identifier from the profile entry.</param>
-/// <param name="Connected">
-/// <c>true</c> when a live <see cref="MonitorViewModel"/> was found for this monitor;
-/// <c>false</c> when the profile names a monitor that is not currently connected (no hardware
-/// writes were attempted).
-/// </param>
-/// <param name="Changes">
-/// Per-setting outcomes. Each element is a <see cref="ProfileChangeOutcome"/> carrying the
-/// canonical setting name, the raw value requested, an optional human-readable display string
-/// (present only on success), the status string, and an optional error message (present only
-/// on hardware failure). Empty when <see cref="Connected"/> is <c>false</c>.
-/// </param>
-public readonly record struct ProfileApplyOutcome(
-    string MonitorId,
-    bool Connected,
-    IReadOnlyList<ProfileChangeOutcome> Changes);
-
-/// <summary>
 /// MainViewModel - Settings UI synchronization and Profile management methods
 /// </summary>
 public partial class MainViewModel

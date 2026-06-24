@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
@@ -129,7 +127,7 @@ public sealed class CliRequestHandler
             case CliCommandNames.Get:
             {
                 var req = envelope.Get ?? new GetRequest();
-                var (result, error, _warning) = MonitorDtoProjector.BuildGetResultWithWarning(
+                var (result, error, _) = MonitorDtoProjector.BuildGetResultWithWarning(
                     snapshot,
                     hiddenIds,
                     req.MonitorNumber,
@@ -231,7 +229,6 @@ public sealed class CliRequestHandler
     }
 
     // ─── Private helpers ──────────────────────────────────────────────────────
-
     private async Task<string> HandleCoreAsync(string requestJson, CancellationToken ct)
     {
         CliRequestEnvelope? envelope = null;
@@ -339,7 +336,6 @@ public sealed class CliRequestHandler
         => JsonSerializer.Serialize(v, ContractsJsonContext.Default.CliErrorResult);
 
     // ─── Error factories ──────────────────────────────────────────────────────
-
     private static CliErrorResult MakeInternalError(string command, string message)
         => new()
         {

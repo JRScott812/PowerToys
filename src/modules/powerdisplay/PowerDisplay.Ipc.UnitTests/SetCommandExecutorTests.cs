@@ -1,16 +1,14 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using PowerDisplay.Contracts;
 using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
+using PowerDisplay.Contracts;
 using PowerDisplay.Ipc;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
@@ -28,7 +26,6 @@ namespace PowerDisplay.Ipc.UnitTests;
 public class SetCommandExecutorTests
 {
     // ─── Shared test fixtures ─────────────────────────────────────────────────
-
     private static readonly IReadOnlySet<string> EmptyHidden =
         new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
@@ -73,7 +70,6 @@ public class SetCommandExecutorTests
     };
 
     // ─── MonitorNotFound (exit code 1) ────────────────────────────────────────
-
     [TestMethod]
     public async Task Set_UnknownMonitorNumber_ReturnsMonitorNotFound()
     {
@@ -103,7 +99,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── OutOfRange (exit code 2) ─────────────────────────────────────────────
-
     [TestMethod]
     public async Task Set_Brightness_OutOfRange_High_ReturnsOutOfRange()
     {
@@ -148,7 +143,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── InvalidDiscreteValue (exit code 3) ───────────────────────────────────
-
     [TestMethod]
     public async Task Set_ColorTemperature_InvalidValue_ReturnsInvalidDiscreteValue()
     {
@@ -207,6 +201,7 @@ public class SetCommandExecutorTests
             ReadValues = MonitorReadFlags.InputSource,
             CurrentInputSource = 0x11,
         };
+
         // SupportsInputSource is true (0x60 in VcpCapabilitiesInfo), so the support check passes.
         // The raw value "0xZZ" fails hex-parse → executor returns InvalidDiscreteValue (exit 3).
         var snapshot = new List<Monitor> { monitor };
@@ -220,7 +215,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── UnsupportedFeature (exit code 4) ────────────────────────────────────
-
     [TestMethod]
     public async Task Set_Brightness_NotSupported_ReturnsUnsupportedFeature()
     {
@@ -282,7 +276,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── HardwareFailure (exit code 5) ────────────────────────────────────────
-
     [TestMethod]
     public async Task Set_Brightness_HardwareFailure_ReturnsHardwareFailure()
     {
@@ -313,7 +306,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── Success paths (exit code 0) ──────────────────────────────────────────
-
     [TestMethod]
     public async Task Set_Brightness_Success_ReturnsBeforeAfterValues()
     {
@@ -441,7 +433,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── PowerState confirmation gate ────────────────────────────────────────
-
     [TestMethod]
     public async Task Set_PowerState_BlankingWithoutConfirm_ReturnsArgumentError()
     {
@@ -455,6 +446,7 @@ public class SetCommandExecutorTests
             CurrentPowerState = 0x01, // On
         };
         var snapshot = new List<Monitor> { monitor };
+
         // 0x04 = Off (DPM) — a display-blanking state
         var req = new SetRequest { MonitorNumber = 9, Setting = "power-state", RawValue = "0x04", ConfirmPowerOff = false };
 
@@ -489,7 +481,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── Unknown setting name ─────────────────────────────────────────────────
-
     [TestMethod]
     public async Task Set_UnknownSetting_ReturnsArgumentError()
     {
@@ -505,7 +496,6 @@ public class SetCommandExecutorTests
     }
 
     // ─── Fake IMonitorManager implementations ────────────────────────────────
-
     /// <summary>Always returns Success for all write operations.</summary>
     private sealed class NoOpManager : IMonitorManager
     {

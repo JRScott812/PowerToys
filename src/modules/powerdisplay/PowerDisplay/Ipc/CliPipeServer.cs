@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain); build+verify on dev box.
 
 using System;
 using System.IO;
@@ -64,7 +62,6 @@ public sealed class CliPipeServer
     }
 
     // ─── Private implementation ───────────────────────────────────────────────
-
     private async Task AcceptLoopAsync(CancellationToken ct)
     {
         var pipeName = PipeNames.CliServer();

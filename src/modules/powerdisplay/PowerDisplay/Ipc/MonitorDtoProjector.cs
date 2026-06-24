@@ -5,9 +5,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using PowerDisplay.Contracts;
 using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Utils;
+using PowerDisplay.Contracts;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 
 namespace PowerDisplay.Ipc;
@@ -109,6 +109,7 @@ public static class MonitorDtoProjector
             {
                 Command = "get",
                 Error = resolveError,
+
                 // Warning is logged separately in CLI; no Monitor ref on a not-found error
             });
         }
@@ -185,7 +186,7 @@ public static class MonitorDtoProjector
     {
         var visible = ExcludeHidden(monitors, hiddenIds);
 
-        var (selected, _warning, resolveError) = ResolveMonitor(visible, number, id);
+        var (selected, _, resolveError) = ResolveMonitor(visible, number, id);
         if (resolveError is not null)
         {
             return (null, new CliErrorResult { Command = "capabilities", Error = resolveError });
