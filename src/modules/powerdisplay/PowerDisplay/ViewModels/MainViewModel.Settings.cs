@@ -5,6 +5,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ManagedCommon;
 using Microsoft.PowerToys.Settings.UI.Library;
@@ -12,6 +13,7 @@ using Microsoft.PowerToys.Telemetry;
 using PowerDisplay.Common.Models;
 using PowerDisplay.Common.Services;
 using PowerDisplay.Common.Utils;
+using PowerDisplay.Contracts;
 using PowerDisplay.Models;
 using PowerDisplay.Serialization;
 using PowerDisplay.Services;
@@ -19,6 +21,28 @@ using PowerDisplay.Telemetry.Events;
 using PowerToys.Interop;
 
 namespace PowerDisplay.ViewModels;
+
+/// <summary>
+/// Per-monitor outcome of applying a profile. Used by IPC callers to build
+/// <see cref="PowerDisplay.Contracts.CliApplyProfileResult"/> without re-running hardware operations.
+/// </summary>
+/// <param name="MonitorId">The monitor's unique identifier from the profile entry.</param>
+/// <param name="Connected">
+/// <c>true</c> when a live <see cref="MonitorViewModel"/> was found for this monitor;
+/// <c>false</c> when the profile names a monitor that is not currently connected (no hardware
+/// writes were attempted).
+/// </param>
+/// <param name="Changes">
+/// Per-setting outcomes. Each tuple carries the canonical setting name (<c>brightness</c>,
+/// <c>contrast</c>, <c>volume</c>, <c>color-temperature</c>) and one of the four status strings
+/// used by <see cref="PowerDisplay.Contracts.CliProfileChange"/>:
+/// <c>applied</c>, <c>unsupported</c>, <c>out-of-range</c>, <c>hardware-failure</c>.
+/// Empty when <see cref="Connected"/> is <c>false</c>.
+/// </param>
+public readonly record struct ProfileApplyOutcome(
+    string MonitorId,
+    bool Connected,
+    IReadOnlyList<(string Setting, string Status)> Changes);
 
 /// <summary>
 /// MainViewModel - Settings UI synchronization and Profile management methods
@@ -88,6 +112,59 @@ public partial class MainViewModel
     }
 
     /// <summary>
+    /// Outcome-capturing variant of <see cref="TryRestore"/> used by
+    /// <see cref="ApplyProfileWithOutcomesInternalAsync"/>. Calls <paramref name="applyAsync"/>
+    /// directly on the monitor manager (returning a <see cref="MonitorOperationResult"/>) so that
+    /// hardware failures are captured rather than swallowed. Returns the status string
+    /// (<c>applied</c>/<c>unsupported</c>/<c>out-of-range</c>/<c>hardware-failure</c>) for
+    /// one setting, or <c>null</c> when the setting was not present in the profile entry.
+    /// </summary>
+    private static async Task<(string Setting, string Status)?> TryRestoreWithOutcomeAsync(
+        int? savedValue,
+        bool isVisible,
+        string settingName,
+        string monitorId,
+        Func<string, int, CancellationToken, Task<MonitorOperationResult>> applyAsync)
+    {
+        if (!savedValue.HasValue)
+        {
+            // Setting not included in this profile entry — skip silently (no outcome row).
+            return null;
+        }
+
+        if (!isVisible)
+        {
+            // Monitor doesn't support (or has disabled) this setting.
+            return (settingName, CliProfileChange.StatusUnsupported);
+        }
+
+        // Basic range guard matching ApplyProfileCommand.ApplyContinuousAsync (0–100 for
+        // percentage-based settings; 0x00–0xFF for VCP color-temperature).
+        // color-temperature is the only non-percentage setting in profiles; it uses VCP byte range.
+        bool outOfRange = settingName == "color-temperature"
+            ? savedValue.Value is < 0 or > 0xFF
+            : savedValue.Value is < 0 or > 100;
+
+        if (outOfRange)
+        {
+            return (settingName, CliProfileChange.StatusOutOfRange);
+        }
+
+        try
+        {
+            var result = await applyAsync(monitorId, savedValue.Value, default);
+            return result.IsSuccess
+                ? (settingName, CliProfileChange.StatusApplied)
+                : (settingName, CliProfileChange.StatusHardwareFailure);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning($"[Profile] Hardware write failed for {settingName}: {ex.Message}");
+            return (settingName, CliProfileChange.StatusHardwareFailure);
+        }
+    }
+
+    /// <summary>
     /// Apply settings changes from Settings UI (IPC event handler entry point)
     /// Only applies UI configuration changes. Hardware parameter changes (e.g., color temperature)
     /// should be triggered via custom actions to avoid unwanted side effects when non-hardware
@@ -153,8 +230,8 @@ public partial class MainViewModel
     }
 
     /// <summary>
-    /// Apply profile by name (called via Named Pipe from Settings UI)
-    /// This is the new direct method that receives the profile name via IPC.
+    /// Apply profile by name (called via Named Pipe from Settings UI).
+    /// This is the existing void-equivalent entry point; it preserves GUI behavior unchanged.
     /// </summary>
     /// <param name="profileName">The name of the profile to apply.</param>
     public async Task ApplyProfileByNameAsync(string profileName)
@@ -180,6 +257,51 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             Logger.LogError($"[Profile] Failed to apply profile '{profileName}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Applies a saved profile by name and returns structured per-monitor/per-setting outcomes
+    /// for the IPC layer to build a <see cref="PowerDisplay.Contracts.CliApplyProfileResult"/>.
+    /// </summary>
+    /// <remarks>
+    /// Unlike <see cref="ApplyProfileByNameAsync"/> (which swallows outcomes), this method
+    /// captures success/failure per setting and returns them as a list of
+    /// <see cref="ProfileApplyOutcome"/> records. Hardware writes are performed sequentially
+    /// per monitor so that outcome ordering matches the profile's monitor list — the original
+    /// <see cref="ApplyProfileAsync"/> parallel writes are preserved for the GUI path.
+    /// </remarks>
+    /// <param name="profileName">The name of the profile to apply.</param>
+    /// <returns>
+    /// One entry per <see cref="PowerDisplay.Models.ProfileMonitorSetting"/> in the profile.
+    /// <see cref="ProfileApplyOutcome.Connected"/> is <c>false</c> for monitors not currently
+    /// visible; otherwise <see cref="ProfileApplyOutcome.Changes"/> contains one entry per
+    /// setting that was present in the profile entry.
+    /// Returns an empty list when the profile is not found.
+    /// </returns>
+    public async Task<IReadOnlyList<ProfileApplyOutcome>> ApplyProfileWithOutcomesAsync(string profileName)
+    {
+        try
+        {
+            Logger.LogInfo($"[Profile] Applying profile with outcomes: {profileName}");
+
+            var profilesData = ProfileService.LoadProfiles();
+            var profile = profilesData.GetProfile(profileName);
+
+            if (profile == null || !profile.IsValid())
+            {
+                Logger.LogWarning($"[Profile] Profile '{profileName}' not found or invalid (outcomes path)");
+                return Array.Empty<ProfileApplyOutcome>();
+            }
+
+            var outcomes = await ApplyProfileWithOutcomesInternalAsync(profile.MonitorSettings);
+            Logger.LogInfo($"[Profile] Completed apply with outcomes: {profileName}, {outcomes.Count} monitor(s)");
+            return outcomes;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError($"[Profile] Failed to apply profile with outcomes '{profileName}': {ex.Message}");
+            return Array.Empty<ProfileApplyOutcome>();
         }
     }
 
@@ -259,6 +381,12 @@ public partial class MainViewModel
     /// <summary>
     /// Apply profile settings to monitors. Profiles are per-monitor snapshots, so applying one
     /// turns off linked brightness before writing individual monitor values.
+    /// <para>
+    /// This method is the GUI code path. It is preserved exactly as-is: settings are dispatched
+    /// in parallel via <c>Task.WhenAll</c> and no per-setting outcome is captured. All existing
+    /// callers (<see cref="ApplyProfileByNameAsync"/>, <see cref="ApplyProfileAndCompleteAsync"/>)
+    /// continue to call this overload.
+    /// </para>
     /// </summary>
     private async Task ApplyProfileAsync(List<ProfileMonitorSetting> monitorSettings)
     {
@@ -298,6 +426,89 @@ public partial class MainViewModel
         {
             await Task.WhenAll(updateTasks);
         }
+    }
+
+    /// <summary>
+    /// Outcome-capturing variant of <see cref="ApplyProfileAsync"/>. Used exclusively by
+    /// <see cref="ApplyProfileWithOutcomesAsync"/> (the IPC entry point). Hardware writes are
+    /// performed sequentially per monitor (not in parallel) so that each outcome can be
+    /// individually captured and attributed to its setting; this is acceptable because the
+    /// outcomes path is IPC-driven, not GUI-driven.
+    /// <para>
+    /// The <see cref="ApplyProfileAsync"/> (GUI) parallel path is NOT touched by this method.
+    /// </para>
+    /// </summary>
+    private async Task<IReadOnlyList<ProfileApplyOutcome>> ApplyProfileWithOutcomesInternalAsync(
+        List<ProfileMonitorSetting> monitorSettings)
+    {
+        if (LinkedLevelsActive)
+        {
+            Logger.LogInfo("[Profile] Disabling linked brightness before applying per-monitor profile values (outcomes path)");
+            LinkedLevelsActive = false;
+        }
+
+        var outcomes = new List<ProfileApplyOutcome>(monitorSettings.Count);
+
+        foreach (var setting in monitorSettings)
+        {
+            var monitorVm = Monitors.FirstOrDefault(m => MonitorIdComparer.Equal(m.Id, setting.MonitorId));
+
+            if (monitorVm == null)
+            {
+                // Monitor not currently connected — report disconnected, no changes attempted.
+                outcomes.Add(new ProfileApplyOutcome(
+                    setting.MonitorId ?? string.Empty,
+                    Connected: false,
+                    Changes: Array.Empty<(string, string)>()));
+                continue;
+            }
+
+            // Collect per-setting outcomes sequentially (one at a time, in profile field order).
+            // We call _monitorManager directly (rather than MonitorViewModel.SetXxxAsync) so that
+            // MonitorOperationResult.IsSuccess is available to distinguish applied vs hardware-failure.
+            // MonitorViewModel UI state is NOT updated here — this path is IPC-only.
+            var monitorId = monitorVm.Id;
+            var changes = new List<(string Setting, string Status)>(4);
+
+            var brightnessOutcome = await TryRestoreWithOutcomeAsync(
+                setting.Brightness, monitorVm.ShowBrightness, "brightness", monitorId,
+                _monitorManager.SetBrightnessAsync);
+            if (brightnessOutcome.HasValue)
+            {
+                changes.Add(brightnessOutcome.Value);
+            }
+
+            var contrastOutcome = await TryRestoreWithOutcomeAsync(
+                setting.Contrast, monitorVm.ShowContrast, "contrast", monitorId,
+                _monitorManager.SetContrastAsync);
+            if (contrastOutcome.HasValue)
+            {
+                changes.Add(contrastOutcome.Value);
+            }
+
+            var volumeOutcome = await TryRestoreWithOutcomeAsync(
+                setting.Volume, monitorVm.ShowVolume, "volume", monitorId,
+                _monitorManager.SetVolumeAsync);
+            if (volumeOutcome.HasValue)
+            {
+                changes.Add(volumeOutcome.Value);
+            }
+
+            var colorTempOutcome = await TryRestoreWithOutcomeAsync(
+                setting.ColorTemperatureVcp, monitorVm.ShowColorTemperature, "color-temperature", monitorId,
+                _monitorManager.SetColorTemperatureAsync);
+            if (colorTempOutcome.HasValue)
+            {
+                changes.Add(colorTempOutcome.Value);
+            }
+
+            outcomes.Add(new ProfileApplyOutcome(
+                monitorId,
+                Connected: true,
+                Changes: changes));
+        }
+
+        return outcomes;
     }
 
     /// <summary>
