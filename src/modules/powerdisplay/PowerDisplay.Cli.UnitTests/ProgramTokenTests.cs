@@ -7,8 +7,8 @@ using System.CommandLine.Parsing;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PowerDisplay.Cli;
 using PowerDisplay.Cli.Commands;
-using PowerDisplay.Contracts;
 using PowerDisplay.Cli.Options;
+using PowerDisplay.Contracts;
 
 namespace PowerDisplay.Cli.UnitTests;
 
