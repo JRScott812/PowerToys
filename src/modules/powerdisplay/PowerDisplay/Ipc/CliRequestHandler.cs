@@ -277,6 +277,8 @@ public sealed class CliRequestHandler
     /// </summary>
     private Task<T> RunOnUiThreadAsync<T>(Func<Task<T>> work)
     {
+        System.Diagnostics.Debug.Assert(!_dispatcherQueue.HasThreadAccess, "HandleAsync must be called from a background thread, not the UI thread");
+
         var tcs = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         var enqueued = _dispatcherQueue.TryEnqueue(async () =>

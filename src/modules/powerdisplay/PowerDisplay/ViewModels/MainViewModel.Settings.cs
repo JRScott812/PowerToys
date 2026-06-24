@@ -366,7 +366,7 @@ public partial class MainViewModel
         catch (Exception ex)
         {
             Logger.LogError($"[Profile] Failed to apply profile with outcomes '{profileName}': {ex.Message}");
-            return Array.Empty<ProfileApplyOutcome>();
+            throw;
         }
     }
 
@@ -524,7 +524,7 @@ public partial class MainViewModel
                 outcomes.Add(new ProfileApplyOutcome(
                     setting.MonitorId ?? string.Empty,
                     Connected: false,
-                    Changes: Array.Empty<(string, string)>()));
+                    Changes: Array.Empty<ProfileChangeOutcome>()));
                 continue;
             }
 
