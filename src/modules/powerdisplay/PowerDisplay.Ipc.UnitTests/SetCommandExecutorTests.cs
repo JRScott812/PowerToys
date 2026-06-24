@@ -32,6 +32,21 @@ public class SetCommandExecutorTests
     private static readonly IReadOnlySet<string> EmptyHidden =
         new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Builds a <see cref="VcpCapabilities"/> that advertises the given VCP codes (no discrete values).
+    /// Used to make <see cref="Monitor.SupportsPowerState"/> / <see cref="Monitor.SupportsInputSource"/> return true.
+    /// </summary>
+    private static VcpCapabilities VcpCapsWithCodes(params byte[] codes)
+    {
+        var caps = new VcpCapabilities();
+        foreach (var code in codes)
+        {
+            caps.SupportedVcpCodes[code] = new VcpCodeInfo(code, $"0x{code:X2}");
+        }
+
+        return caps;
+    }
+
     /// <summary>A monitor with brightness support, current value 42, GDI device name present.</summary>
     private static Monitor BrightnessMon() => new()
     {
@@ -142,7 +157,7 @@ public class SetCommandExecutorTests
             Id = "C",
             MonitorNumber = 3,
             Name = "ColorMon",
-            Capabilities = MonitorCapabilities.ColorTemperature,
+            SupportsColorTemperature = true,
             ReadValues = MonitorReadFlags.ColorTemperature,
             CurrentColorTemperature = 0x05,
         };
@@ -188,16 +203,12 @@ public class SetCommandExecutorTests
             Id = "E",
             MonitorNumber = 5,
             Name = "InputMon",
-            Capabilities = MonitorCapabilities.InputSource,
+            VcpCapabilitiesInfo = VcpCapsWithCodes(0x60), // makes SupportsInputSource == true
             ReadValues = MonitorReadFlags.InputSource,
             CurrentInputSource = 0x11,
-            // SupportedInputSources = [0x11, 0x12] — the value 0x17 is not in the list
         };
-        // Set SupportedInputSources via reflection-style property assignment would be ideal,
-        // but since we cannot call the constructor with a list, use a monitor with VCP caps
-        // that advertise only specific values. If Monitor.SupportedInputSources is null/empty,
-        // the validator accepts any value, so skip the list-validation branch test here and
-        // rely on the parse-error path (0xZZ is not valid hex).
+        // SupportsInputSource is true (0x60 in VcpCapabilitiesInfo), so the support check passes.
+        // The raw value "0xZZ" fails hex-parse → executor returns InvalidDiscreteValue (exit 3).
         var snapshot = new List<Monitor> { monitor };
         var req = new SetRequest { MonitorNumber = 5, Setting = "input-source", RawValue = "0xZZ" };
 
@@ -439,7 +450,7 @@ public class SetCommandExecutorTests
             Id = "I",
             MonitorNumber = 9,
             Name = "PowerMon",
-            Capabilities = MonitorCapabilities.PowerState,
+            VcpCapabilitiesInfo = VcpCapsWithCodes(0xD6), // makes SupportsPowerState == true
             ReadValues = MonitorReadFlags.PowerState,
             CurrentPowerState = 0x01, // On
         };
@@ -463,7 +474,7 @@ public class SetCommandExecutorTests
             Id = "I",
             MonitorNumber = 9,
             Name = "PowerMon",
-            Capabilities = MonitorCapabilities.PowerState,
+            VcpCapabilitiesInfo = VcpCapsWithCodes(0xD6), // makes SupportsPowerState == true
             ReadValues = MonitorReadFlags.PowerState,
             CurrentPowerState = 0x01,
         };
