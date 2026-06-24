@@ -1,6 +1,8 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
+//
+// [UNVERIFIED] Not compiled (no VS C++ toolchain via CLI->Lib->interop chain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
@@ -13,11 +15,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using ManagedCommon;
 using PowerDisplay.Cli.Commands;
+using PowerDisplay.Cli.Ipc;
 using PowerDisplay.Cli.Options;
+using PowerDisplay.Cli.Output;
 using PowerDisplay.Contracts;
 using PowerDisplay.Cli.Properties;
-using PowerDisplay.Cli.Settings;
-using PowerDisplay.Common.Services;
 
 namespace PowerDisplay.Cli;
 
@@ -74,17 +76,13 @@ public static class Program
         }
 
         var timeoutSeconds = parseResult.GetValueForOption(CliOptions.TimeoutSeconds) ?? DefaultTimeoutSeconds;
+        var timeout = timeoutSeconds > 0 ? TimeSpan.FromSeconds(timeoutSeconds) : TimeSpan.FromMilliseconds(int.MaxValue);
         var timedOut = false;
         Timer? timeoutTimer = null;
 
         try
         {
-            using var monitorManager = new MonitorManager();
             using var cts = new CancellationTokenSource();
-
-            var runtime = CliSettingsReader.Read();
-            var maxCompatOverride = parseResult.GetValueForOption(CliOptions.MaxCompatibility);
-            monitorManager.SetMaxCompatibilityMode(maxCompatOverride ?? runtime.MaxCompatibilityMode);
 
             Console.CancelKeyPress += (_, e) =>
             {
@@ -120,97 +118,9 @@ public static class Program
             }
 
             var command = parseResult.CommandResult.Command;
+            var dispatcher = new IpcDispatcher(output, timeout);
 
-            Task<int> DispatchAsync()
-            {
-                if (command == root.ListCommand)
-                {
-                    return ListCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, output, cts.Token);
-                }
-
-                if (command == root.CapabilitiesCommand)
-                {
-                    return CapabilitiesCommand.RunAsync(
-                        monitorManager,
-                        runtime.HiddenMonitorIds,
-                        parseResult.GetValueForOption(CliOptions.MonitorNumber),
-                        parseResult.GetValueForOption(CliOptions.MonitorId),
-                        output,
-                        cts.Token);
-                }
-
-                if (command == root.GetCommand)
-                {
-                    return GetCommand.RunAsync(
-                        monitorManager,
-                        runtime.HiddenMonitorIds,
-                        parseResult.GetValueForOption(CliOptions.MonitorNumber),
-                        parseResult.GetValueForOption(CliOptions.MonitorId),
-                        parseResult.GetValueForOption(CliOptions.SettingFilter),
-                        output,
-                        cts.Token);
-                }
-
-                if (command == root.SetCommand)
-                {
-                    var inputs = new SetCommandInputs
-                    {
-                        MonitorNumber = parseResult.GetValueForOption(CliOptions.MonitorNumber),
-                        MonitorId = parseResult.GetValueForOption(CliOptions.MonitorId),
-                        Brightness = parseResult.GetValueForOption(CliOptions.Brightness),
-                        Contrast = parseResult.GetValueForOption(CliOptions.Contrast),
-                        Volume = parseResult.GetValueForOption(CliOptions.Volume),
-                        ColorTemperature = parseResult.GetValueForOption(CliOptions.ColorTemperature),
-                        InputSource = parseResult.GetValueForOption(CliOptions.InputSource),
-                        PowerState = parseResult.GetValueForOption(CliOptions.PowerState),
-                        Orientation = parseResult.GetValueForOption(CliOptions.Orientation),
-                        ConfirmPowerOff = parseResult.GetValueForOption(CliOptions.ConfirmPowerOff),
-                    };
-
-                    return SetCommand.RunAsync(monitorManager, runtime.HiddenMonitorIds, inputs, output, cts.Token);
-                }
-
-                if (command == root.ProfilesCommand)
-                {
-                    return Task.FromResult(ProfilesCommand.Run(ProfileService.LoadProfiles(), output));
-                }
-
-                if (command == root.ApplyProfileCommand)
-                {
-                    return ApplyProfileCommand.RunAsync(
-                        monitorManager,
-                        runtime.HiddenMonitorIds,
-                        ProfileService.LoadProfiles(),
-                        parseResult.GetValueForArgument(CliOptions.ProfileName),
-                        output,
-                        cts.Token);
-                }
-
-                return root.InvokeAsync(args);
-            }
-
-            var commandTask = DispatchAsync();
-
-            // Race the command against cancellation (the timeout timer OR Ctrl+C, both of which cancel
-            // `cts`). A wedged synchronous DDC/CI call cannot observe the token, so without this race a
-            // single unresponsive monitor would block the process past the deadline. If cancellation
-            // wins, report TIMEOUT and exit hard: we deliberately skip the `using` disposal below
-            // because a background thread may still be inside a blocking native call against the
-            // handles MonitorManager would otherwise free (a use-after-free on teardown). The orphaned
-            // call is abandoned with the exiting process.
-            var cancellationWaiter = Task.Delay(Timeout.Infinite, cts.Token);
-            var finished = await Task.WhenAny(commandTask, cancellationWaiter);
-            if (finished != commandTask && !commandTask.IsCompleted)
-            {
-                output.WriteError(BuildTimeoutErrorResult(parseResult.CommandResult.Command.Name, timedOut, timeoutSeconds));
-                Console.Out.Flush();
-                Console.Error.Flush();
-                Environment.Exit(CliExitCodes.Timeout);
-            }
-
-            // Awaiting the completed task surfaces cooperative cancellation (discovery checkpoints or
-            // the post-write token check) as OperationCanceledException → handled below as TIMEOUT.
-            return await commandTask;
+            return await DispatchAsync(root, args, command, parseResult, dispatcher, output, cts.Token);
         }
         catch (OperationCanceledException)
         {
@@ -236,6 +146,161 @@ public static class Program
         {
             timeoutTimer?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// Routes the parsed command to the appropriate IPC send-and-render helper.
+    /// Pure-syntactic validation (setting count, setting name) is checked here before
+    /// any IPC round-trip. Extracted as a static method so tests can drive it directly.
+    /// </summary>
+    internal static async Task<int> DispatchAsync(
+        PowerDisplayRootCommand root,
+        string[] args,
+        Command command,
+        ParseResult parseResult,
+        IpcDispatcher dispatcher,
+        ICliOutput output,
+        CancellationToken cancellationToken)
+    {
+        // ── list ──────────────────────────────────────────────────────────────
+        if (command == root.ListCommand)
+        {
+            return await dispatcher.SendListAsync(CliRequestBuilder.BuildList(), cancellationToken);
+        }
+
+        // ── get ───────────────────────────────────────────────────────────────
+        if (command == root.GetCommand)
+        {
+            var monitorNumber = parseResult.GetValueForOption(CliOptions.MonitorNumber);
+            var monitorId = parseResult.GetValueForOption(CliOptions.MonitorId);
+            var settingFilter = parseResult.GetValueForOption(CliOptions.SettingFilter);
+
+            // CLI-side syntactic validation: reject unknown --setting names here so the error
+            // is surfaced without a round-trip and matches the existing ARGUMENT_ERROR (7) shape.
+            if (settingFilter is not null
+                && System.Array.IndexOf(GetCommand.AllSettingNames, settingFilter.ToLowerInvariant()) < 0)
+            {
+                output.WriteError(new CliErrorResult
+                {
+                    Command = "get",
+                    Error = new CliError
+                    {
+                        Code = CliErrorCodes.ArgumentError,
+                        ExitCode = CliExitCodes.ArgumentError,
+                        Setting = settingFilter,
+                        Message = Resources.Error_UnknownSetting(settingFilter),
+                        Hint = Resources.Hint_ValidSettings(string.Join(", ", GetCommand.AllSettingNames)),
+                    },
+                });
+                return CliExitCodes.ArgumentError;
+            }
+
+            // Carry-forward: emit the "-n ignored" warning locally when both selectors are supplied.
+            // The app discards -n in that case, so the CLI surfaces the warning without a round-trip.
+            if (monitorNumber.HasValue && !string.IsNullOrEmpty(monitorId))
+            {
+                output.WriteWarning(Resources.Warn_MonitorNumberIgnored(monitorNumber.GetValueOrDefault()));
+            }
+
+            return await dispatcher.SendGetAsync(
+                CliRequestBuilder.BuildGet(monitorNumber, monitorId, settingFilter),
+                cancellationToken);
+        }
+
+        // ── set ───────────────────────────────────────────────────────────────
+        if (command == root.SetCommand)
+        {
+            var inputs = new SetCommandInputs
+            {
+                MonitorNumber = parseResult.GetValueForOption(CliOptions.MonitorNumber),
+                MonitorId = parseResult.GetValueForOption(CliOptions.MonitorId),
+                Brightness = parseResult.GetValueForOption(CliOptions.Brightness),
+                Contrast = parseResult.GetValueForOption(CliOptions.Contrast),
+                Volume = parseResult.GetValueForOption(CliOptions.Volume),
+                ColorTemperature = parseResult.GetValueForOption(CliOptions.ColorTemperature),
+                InputSource = parseResult.GetValueForOption(CliOptions.InputSource),
+                PowerState = parseResult.GetValueForOption(CliOptions.PowerState),
+                Orientation = parseResult.GetValueForOption(CliOptions.Orientation),
+                ConfirmPowerOff = parseResult.GetValueForOption(CliOptions.ConfirmPowerOff),
+            };
+
+            // CLI-side syntactic validation: exactly one setting must be specified.
+            var selected = SetCommand.CountSelectedSettings(inputs);
+            if (selected == 0)
+            {
+                output.WriteError(new CliErrorResult
+                {
+                    Command = "set",
+                    Error = new CliError
+                    {
+                        Code = CliErrorCodes.ArgumentError,
+                        ExitCode = CliExitCodes.ArgumentError,
+                        Message = Resources.Error_NoSettingSpecified,
+                    },
+                });
+                return CliExitCodes.ArgumentError;
+            }
+
+            if (selected > 1)
+            {
+                output.WriteError(new CliErrorResult
+                {
+                    Command = "set",
+                    Error = new CliError
+                    {
+                        Code = CliErrorCodes.ArgumentError,
+                        ExitCode = CliExitCodes.ArgumentError,
+                        Message = Resources.Error_OnlyOneSetting,
+                        Hint = Resources.Hint_OnlyOneSetting,
+                    },
+                });
+                return CliExitCodes.ArgumentError;
+            }
+
+            // Carry-forward: emit the "-n ignored" warning locally when both selectors are supplied.
+            var monitorNumber = inputs.MonitorNumber;
+            var monitorId = inputs.MonitorId;
+            if (monitorNumber.HasValue && !string.IsNullOrEmpty(monitorId))
+            {
+                output.WriteWarning(Resources.Warn_MonitorNumberIgnored(monitorNumber.GetValueOrDefault()));
+            }
+
+            return await dispatcher.SendSetAsync(CliRequestBuilder.BuildSet(inputs), cancellationToken);
+        }
+
+        // ── capabilities ──────────────────────────────────────────────────────
+        if (command == root.CapabilitiesCommand)
+        {
+            var monitorNumber = parseResult.GetValueForOption(CliOptions.MonitorNumber);
+            var monitorId = parseResult.GetValueForOption(CliOptions.MonitorId);
+
+            // Carry-forward: emit the "-n ignored" warning locally when both selectors are supplied.
+            if (monitorNumber.HasValue && !string.IsNullOrEmpty(monitorId))
+            {
+                output.WriteWarning(Resources.Warn_MonitorNumberIgnored(monitorNumber.GetValueOrDefault()));
+            }
+
+            return await dispatcher.SendCapabilitiesAsync(
+                CliRequestBuilder.BuildCapabilities(monitorNumber, monitorId),
+                cancellationToken);
+        }
+
+        // ── profiles ──────────────────────────────────────────────────────────
+        if (command == root.ProfilesCommand)
+        {
+            return await dispatcher.SendProfilesAsync(CliRequestBuilder.BuildProfiles(), cancellationToken);
+        }
+
+        // ── apply-profile ─────────────────────────────────────────────────────
+        if (command == root.ApplyProfileCommand)
+        {
+            var profileName = parseResult.GetValueForArgument(CliOptions.ProfileName);
+            return await dispatcher.SendApplyProfileAsync(
+                CliRequestBuilder.BuildApplyProfile(profileName),
+                cancellationToken);
+        }
+
+        return await root.InvokeAsync(args);
     }
 
     public static bool HasHelpToken(ParseResult parseResult)
@@ -279,7 +344,7 @@ public static class Program
         };
     }
 
-    // Shared TIMEOUT envelope for both the cancellation-race path and the OperationCanceledException catch.
+    // Shared TIMEOUT envelope for both the OperationCanceledException catch path.
     private static CliErrorResult BuildTimeoutErrorResult(string command, bool timedOut, int timeoutSeconds)
         => new()
         {
