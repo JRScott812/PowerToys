@@ -1,0 +1,258 @@
+// Copyright (c) Microsoft Corporation
+// The Microsoft Corporation licenses this file to you under the MIT license.
+// See the LICENSE file in the project root for more information.
+
+using System.Collections.Generic;
+using System.Text.Json;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using PowerDisplay.Contracts;
+
+namespace PowerDisplay.Contracts.UnitTests;
+
+[TestClass]
+public class RoundTripTests
+{
+    [TestMethod]
+    public void SetRequest_envelope_round_trips_through_source_gen()
+    {
+        var envelope = new CliRequestEnvelope
+        {
+            Command = CliCommandNames.Set,
+            Set = new SetRequest { MonitorNumber = 1, Setting = "brightness", RawValue = "50", ConfirmPowerOff = false },
+        };
+
+        var json = JsonSerializer.Serialize(envelope, ContractsJsonContext.Default.CliRequestEnvelope);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliRequestEnvelope);
+
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CliCommandNames.Set, back!.Command);
+        Assert.AreEqual(1, back.Set!.MonitorNumber);
+        Assert.AreEqual("brightness", back.Set.Setting);
+        Assert.AreEqual("50", back.Set.RawValue);
+    }
+
+    [TestMethod]
+    public void ErrorResult_round_trips_and_preserves_exit_code()
+    {
+        var error = new CliErrorResult
+        {
+            Command = "set",
+            Error = new CliError
+            {
+                Code = CliErrorCodes.ProviderUnavailable,
+                ExitCode = CliExitCodes.ProviderUnavailable,
+                Message = "PowerDisplay is not running.",
+            },
+        };
+
+        var json = JsonSerializer.Serialize(error, ContractsJsonContext.Default.CliErrorResult);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliErrorResult);
+
+        Assert.IsNotNull(back);
+        Assert.AreEqual(CliExitCodes.ProviderUnavailable, back!.Error!.ExitCode);
+        Assert.AreEqual("PROVIDER_UNAVAILABLE", back.Error.Code);
+    }
+
+    [TestMethod]
+    public void CliListResult_round_trips_with_nested_monitors()
+    {
+        var result = new CliListResult
+        {
+            Monitors = new List<CliListMonitor>
+            {
+                new CliListMonitor
+                {
+                    Number = 1,
+                    Id = "DISPLAY\\DEL0A8C\\4&1a2b3c4d&0&UID12345",
+                    Name = "Dell U2722D",
+                    Method = "DDC/CI",
+                    SupportsBrightness = true,
+                    SupportsContrast = true,
+                    SupportsVolume = false,
+                    SupportsColorTemperature = true,
+                    SupportsInputSource = true,
+                    SupportsPowerState = true,
+                    SupportsOrientation = false,
+                },
+            },
+        };
+
+        var json = JsonSerializer.Serialize(result, ContractsJsonContext.Default.CliListResult);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliListResult);
+
+        Assert.IsNotNull(back);
+        Assert.IsTrue(back!.Ok);
+        Assert.AreEqual("list", back.Command);
+        Assert.AreEqual(1, back.Monitors.Count);
+        Assert.AreEqual("Dell U2722D", back.Monitors[0].Name);
+        Assert.AreEqual("DDC/CI", back.Monitors[0].Method);
+        Assert.IsTrue(back.Monitors[0].SupportsBrightness);
+        Assert.IsFalse(back.Monitors[0].SupportsVolume);
+    }
+
+    [TestMethod]
+    public void CliGetResult_round_trips_with_nested_settings()
+    {
+        var result = new CliGetResult
+        {
+            Monitors = new List<CliGetMonitorEntry>
+            {
+                new CliGetMonitorEntry
+                {
+                    Monitor = new CliMonitorRef { Number = 1, Id = "MON1", Name = "Monitor A", Method = "DDC/CI" },
+                    Settings = new List<CliSettingValue>
+                    {
+                        new CliSettingValue { Setting = "brightness", Raw = 75, Display = "75%", Supported = true },
+                        new CliSettingValue { Setting = "contrast", Raw = 50, Display = "50%", Supported = true },
+                        new CliSettingValue { Setting = "volume", Supported = false },
+                    },
+                },
+            },
+        };
+
+        var json = JsonSerializer.Serialize(result, ContractsJsonContext.Default.CliGetResult);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliGetResult);
+
+        Assert.IsNotNull(back);
+        Assert.IsTrue(back!.Ok);
+        Assert.AreEqual("get", back.Command);
+        Assert.AreEqual(1, back.Monitors.Count);
+        Assert.AreEqual("MON1", back.Monitors[0].Monitor.Id);
+        Assert.AreEqual(3, back.Monitors[0].Settings.Count);
+        Assert.AreEqual(75, back.Monitors[0].Settings[0].Raw);
+        Assert.AreEqual("75%", back.Monitors[0].Settings[0].Display);
+        Assert.IsNull(back.Monitors[0].Settings[2].Raw);
+        Assert.IsFalse(back.Monitors[0].Settings[2].Supported);
+    }
+
+    [TestMethod]
+    public void CliSetResult_round_trips_with_before_after_values()
+    {
+        var result = new CliSetResult
+        {
+            Monitor = new CliMonitorRef { Number = 1, Id = "MON1", Name = "Monitor A", Method = "DDC/CI" },
+            Setting = "brightness",
+            BeforeRaw = 50,
+            AfterRaw = 75,
+            BeforeDisplay = "50%",
+            AfterDisplay = "75%",
+        };
+
+        var json = JsonSerializer.Serialize(result, ContractsJsonContext.Default.CliSetResult);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliSetResult);
+
+        Assert.IsNotNull(back);
+        Assert.IsTrue(back!.Ok);
+        Assert.AreEqual("set", back.Command);
+        Assert.AreEqual("brightness", back.Setting);
+        Assert.AreEqual(50, back.BeforeRaw);
+        Assert.AreEqual(75, back.AfterRaw);
+        Assert.AreEqual("50%", back.BeforeDisplay);
+        Assert.AreEqual("75%", back.AfterDisplay);
+        Assert.AreEqual("MON1", back.Monitor.Id);
+    }
+
+    [TestMethod]
+    public void CliCapabilitiesResult_round_trips_with_vcp_codes()
+    {
+        var result = new CliCapabilitiesResult
+        {
+            Monitor = new CliMonitorRef { Number = 1, Id = "MON1", Name = "Monitor A" },
+            CommunicationMethod = "DDC/CI",
+            RawCapabilities = "(prot(monitor)type(LCD)model(U2722D)cmds(01 02 03 07 0C E3 F3)vcp(02 04 05 08 10 12 14(05 08 0B 0C) 16 18 1A 52 60(01 03 04 0F 11 12) AC AE B6 C0 C6 C8 C9 D6 DF E1 E2 F1 F2 FD)mswhql(1)mccs_ver(2.1))",
+            Model = "U2722D",
+            MccsVersion = "2.1",
+            VcpCodes = new List<CliVcpCodeInfo>
+            {
+                new CliVcpCodeInfo { Code = "10", Name = "Luminance", Continuous = true },
+                new CliVcpCodeInfo { Code = "60", Name = "Input Source", Continuous = false, DiscreteValues = new List<string> { "DP1", "HDMI1" } },
+            },
+        };
+
+        var json = JsonSerializer.Serialize(result, ContractsJsonContext.Default.CliCapabilitiesResult);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliCapabilitiesResult);
+
+        Assert.IsNotNull(back);
+        Assert.IsTrue(back!.Ok);
+        Assert.AreEqual("capabilities", back.Command);
+        Assert.AreEqual("DDC/CI", back.CommunicationMethod);
+        Assert.AreEqual("U2722D", back.Model);
+        Assert.AreEqual("2.1", back.MccsVersion);
+        Assert.AreEqual(2, back.VcpCodes.Count);
+        Assert.IsTrue(back.VcpCodes[0].Continuous);
+        Assert.IsFalse(back.VcpCodes[1].Continuous);
+        Assert.IsNotNull(back.VcpCodes[1].DiscreteValues);
+        Assert.AreEqual(2, back.VcpCodes[1].DiscreteValues!.Count);
+        Assert.AreEqual("DP1", back.VcpCodes[1].DiscreteValues![0]);
+    }
+
+    [TestMethod]
+    public void CliProfileListResult_round_trips_with_profiles()
+    {
+        var result = new CliProfileListResult
+        {
+            Profiles = new List<CliProfileInfo>
+            {
+                new CliProfileInfo { Name = "Gaming", MonitorCount = 2, LastModified = "2024-01-15T10:30:00Z" },
+                new CliProfileInfo { Name = "Work", MonitorCount = 1, LastModified = null },
+            },
+        };
+
+        var json = JsonSerializer.Serialize(result, ContractsJsonContext.Default.CliProfileListResult);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliProfileListResult);
+
+        Assert.IsNotNull(back);
+        Assert.IsTrue(back!.Ok);
+        Assert.AreEqual("profiles", back.Command);
+        Assert.AreEqual(2, back.Profiles.Count);
+        Assert.AreEqual("Gaming", back.Profiles[0].Name);
+        Assert.AreEqual(2, back.Profiles[0].MonitorCount);
+        Assert.AreEqual("2024-01-15T10:30:00Z", back.Profiles[0].LastModified);
+        Assert.AreEqual("Work", back.Profiles[1].Name);
+        Assert.IsNull(back.Profiles[1].LastModified);
+    }
+
+    [TestMethod]
+    public void CliApplyProfileResult_round_trips_with_outcomes()
+    {
+        var result = new CliApplyProfileResult
+        {
+            Profile = "Gaming",
+            Monitors = new List<CliProfileMonitorOutcome>
+            {
+                new CliProfileMonitorOutcome
+                {
+                    Monitor = new CliMonitorRef { Number = 1, Id = "MON1", Name = "Monitor A" },
+                    Connected = true,
+                    Changes = new List<CliProfileChange>
+                    {
+                        new CliProfileChange { Setting = "brightness", Value = 80, Display = "80%", Status = CliProfileChange.StatusApplied },
+                        new CliProfileChange { Setting = "volume", Value = 0, Status = CliProfileChange.StatusUnsupported },
+                    },
+                },
+                new CliProfileMonitorOutcome
+                {
+                    Monitor = new CliMonitorRef { Number = 2, Id = "MON2", Name = "Monitor B" },
+                    Connected = false,
+                    Changes = new List<CliProfileChange>(),
+                },
+            },
+        };
+
+        var json = JsonSerializer.Serialize(result, ContractsJsonContext.Default.CliApplyProfileResult);
+        var back = JsonSerializer.Deserialize(json, ContractsJsonContext.Default.CliApplyProfileResult);
+
+        Assert.IsNotNull(back);
+        Assert.IsTrue(back!.Ok);
+        Assert.AreEqual("apply-profile", back.Command);
+        Assert.AreEqual("Gaming", back.Profile);
+        Assert.AreEqual(2, back.Monitors.Count);
+        Assert.IsTrue(back.Monitors[0].Connected);
+        Assert.AreEqual(2, back.Monitors[0].Changes.Count);
+        Assert.AreEqual(CliProfileChange.StatusApplied, back.Monitors[0].Changes[0].Status);
+        Assert.AreEqual("80%", back.Monitors[0].Changes[0].Display);
+        Assert.AreEqual(CliProfileChange.StatusUnsupported, back.Monitors[0].Changes[1].Status);
+        Assert.IsFalse(back.Monitors[1].Connected);
+        Assert.AreEqual(0, back.Monitors[1].Changes.Count);
+    }
+}
