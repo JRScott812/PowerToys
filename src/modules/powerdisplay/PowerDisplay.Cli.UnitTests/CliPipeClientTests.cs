@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain via CLI->Lib->interop chain); build+verify on dev box.
 
 using System;
 using System.IO;
@@ -26,10 +24,10 @@ namespace PowerDisplay.Cli.UnitTests;
 public class CliPipeClientTests
 {
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
+
     private static readonly TimeSpan ShortTimeout = TimeSpan.FromMilliseconds(200);
 
     // ── Happy-path: in-proc fake server ──────────────────────────────────────
-
     [TestMethod]
     [Timeout(10_000)]
     public async Task SendAsync_WithFakeServer_ReturnsCannedResponse()
@@ -59,6 +57,7 @@ public class CliPipeClientTests
             using var writer = new StreamWriter(server, pipeEncoding, 1024, leaveOpen: true) { AutoFlush = true };
 
             var line = await reader.ReadLineAsync();
+
             // Echo back the canned response regardless of what was sent
             await writer.WriteLineAsync(ResponseJson);
         });
@@ -75,7 +74,6 @@ public class CliPipeClientTests
     }
 
     // ── No-server path: returns null within short timeout ────────────────────
-
     [TestMethod]
     [Timeout(5_000)]
     public async Task SendAsync_NoServer_ReturnsNullWithinShortTimeout()
@@ -89,7 +87,6 @@ public class CliPipeClientTests
     }
 
     // ── Cancellation propagates ───────────────────────────────────────────────
-
     [TestMethod]
     [Timeout(5_000)]
     public async Task SendAsync_CancelledToken_ThrowsOperationCanceledException()

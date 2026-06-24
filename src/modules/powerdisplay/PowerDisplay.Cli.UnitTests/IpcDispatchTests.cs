@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain via CLI->Lib->interop chain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
@@ -32,28 +30,46 @@ public class IpcDispatchTests
     private static readonly TimeSpan AnyTimeout = TimeSpan.FromSeconds(30);
 
     // ── helpers ──────────────────────────────────────────────────────────────
-
-    private sealed class CaptureOutput : ICliOutput
+    private sealed class CaptureOutput : ICliOutput, IDisposable
     {
-        public readonly List<string> StdoutLines = new();
-        public readonly List<string> StderrLines = new();
+        private readonly List<string> stdoutLines = new();
 
-        private readonly StringWriter _stdout = new();
-        private readonly StringWriter _stderr = new();
+        private readonly List<string> stderrLines = new();
 
-        public void WriteListResult(CliListResult r) => StdoutLines.Add("list:" + r.Command);
-        public void WriteSetResult(CliSetResult r) => StdoutLines.Add("set:" + r.Setting);
-        public void WriteGetResult(CliGetResult r) => StdoutLines.Add("get");
-        public void WriteCapabilitiesResult(CliCapabilitiesResult r) => StdoutLines.Add("capabilities");
-        public void WriteProfileListResult(CliProfileListResult r) => StdoutLines.Add("profiles");
-        public void WriteApplyProfileResult(CliApplyProfileResult r) => StdoutLines.Add("apply-profile:" + r.Ok);
-        public void WriteError(CliErrorResult r) => StderrLines.Add("error:" + r.Error.Code + ":" + r.Error.ExitCode);
-        public void WriteWarning(string message) => StderrLines.Add("warn:" + message);
+        private readonly StringWriter stdout = new();
+
+        private readonly StringWriter stderr = new();
+
+        public IReadOnlyList<string> StdoutLines => this.stdoutLines;
+
+        public IReadOnlyList<string> StderrLines => this.stderrLines;
+
+        public void WriteListResult(CliListResult r) => this.stdoutLines.Add("list:" + r.Command);
+
+        public void WriteSetResult(CliSetResult r) => this.stdoutLines.Add("set:" + r.Setting);
+
+        public void WriteGetResult(CliGetResult r) => this.stdoutLines.Add("get");
+
+        public void WriteCapabilitiesResult(CliCapabilitiesResult r) => this.stdoutLines.Add("capabilities");
+
+        public void WriteProfileListResult(CliProfileListResult r) => this.stdoutLines.Add("profiles");
+
+        public void WriteApplyProfileResult(CliApplyProfileResult r) => this.stdoutLines.Add("apply-profile:" + r.Ok);
+
+        public void WriteError(CliErrorResult r) => this.stderrLines.Add("error:" + r.Error.Code + ":" + r.Error.ExitCode);
+
+        public void WriteWarning(string message) => this.stderrLines.Add("warn:" + message);
+
+        public void Dispose()
+        {
+            this.stdout.Dispose();
+            this.stderr.Dispose();
+        }
     }
 
     private static IpcDispatcher MakeDispatcher(string? stubResponse, CaptureOutput output)
     {
-        Task<string?> StubSend(string _, TimeSpan __, CancellationToken ___) =>
+        Task<string?> StubSend(string requestJson, TimeSpan timeout, CancellationToken cancellationToken) =>
             Task.FromResult(stubResponse);
         return new IpcDispatcher(StubSend, output, AnyTimeout);
     }
@@ -65,7 +81,6 @@ public class IpcDispatchTests
         => JsonSerializer.Serialize(err, ContractsJsonContext.Default.CliErrorResult);
 
     // ── ProviderUnavailable (null) ────────────────────────────────────────────
-
     [TestMethod]
     public async Task When_provider_unavailable_list_exits_10()
     {
@@ -126,7 +141,6 @@ public class IpcDispatchTests
     }
 
     // ── Success responses rendered, exit 0 ───────────────────────────────────
-
     [TestMethod]
     public async Task Success_list_renders_result_exits_0()
     {
@@ -169,7 +183,6 @@ public class IpcDispatchTests
     }
 
     // ── Error responses rendered, correct exit code ───────────────────────────
-
     [TestMethod]
     public async Task Error_response_renders_error_and_returns_its_exit_code()
     {
@@ -295,7 +308,6 @@ public class IpcDispatchTests
     }
 
     // ── CliRequestBuilder round-trips ────────────────────────────────────────
-
     [TestMethod]
     public void BuildSet_Brightness_MapsCorrectly()
     {
