@@ -499,7 +499,9 @@ public class SetCommandExecutorTests
     /// <summary>Always returns Success for all write operations.</summary>
     private sealed class NoOpManager : IMonitorManager
     {
-        public void SetMaxCompatibilityMode(bool enabled) { }
+        public void SetMaxCompatibilityMode(bool enabled)
+        {
+        }
 
         public Task<IReadOnlyList<Monitor>> DiscoverMonitorsAsync(CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<Monitor>>(new List<Monitor>());
@@ -536,7 +538,9 @@ public class SetCommandExecutorTests
             _errorMessage = errorMessage;
         }
 
-        public void SetMaxCompatibilityMode(bool enabled) { }
+        public void SetMaxCompatibilityMode(bool enabled)
+        {
+        }
 
         public Task<IReadOnlyList<Monitor>> DiscoverMonitorsAsync(CancellationToken cancellationToken = default)
             => Task.FromResult<IReadOnlyList<Monitor>>(new List<Monitor>());

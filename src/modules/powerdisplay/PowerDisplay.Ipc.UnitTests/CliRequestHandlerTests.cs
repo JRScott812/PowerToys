@@ -61,7 +61,9 @@ public class CliRequestHandlerTests
 
         public string FailureMessage { get; set; } = "hardware error";
 
-        public void SetMaxCompatibilityMode(bool enabled) { }
+        public void SetMaxCompatibilityMode(bool enabled)
+        {
+        }
 
         public Task<IReadOnlyList<Monitor>> DiscoverMonitorsAsync(CancellationToken ct = default)
             => Task.FromResult<IReadOnlyList<Monitor>>(Array.Empty<Monitor>());
