@@ -59,23 +59,6 @@ public class ProgramTokenTests
         => Assert.IsFalse(Program.IsVersionRequest(Parse("set", "-n", "1", "--version")));
 
     [TestMethod]
-    public void MaxCompatibility_BareFlag_ParsesTrue()
-        => Assert.AreEqual(true, Parse("--max-compatibility").GetValueForOption(CliOptions.MaxCompatibility));
-
-    [TestMethod]
-    public void MaxCompatibility_Absent_ParsesNull()
-        => Assert.IsNull(Parse("list").GetValueForOption(CliOptions.MaxCompatibility));
-
-    [TestMethod]
-    public void MaxCompatibility_ExplicitValue_ParsesThatValue()
-    {
-        // Verify an explicit value overrides; determine the accepted syntax that the
-        // pinned System.CommandLine 2.0.0-beta4 supports for a bool option value.
-        var result = Parse("--max-compatibility:false").GetValueForOption(CliOptions.MaxCompatibility);
-        Assert.AreEqual(false, result);
-    }
-
-    [TestMethod]
     public void BuildParseErrorResult_CollapsesMultipleMessagesIntoOneEnvelope()
     {
         // System.CommandLine can report several errors for one bad invocation; they must be

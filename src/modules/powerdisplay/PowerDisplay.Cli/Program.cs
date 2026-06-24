@@ -45,9 +45,8 @@ public static class Program
             return await root.InvokeAsync(args);
         }
 
-        var useJson = parseResult.GetValueForOption(CliOptions.Json);
         var quiet = parseResult.GetValueForOption(CliOptions.Quiet);
-        ICliOutput output = useJson ? new JsonCliOutput(quiet) : new TextCliOutput(quiet);
+        ICliOutput output = new TextCliOutput(quiet);
 
         if (parseResult.Errors.Count > 0)
         {

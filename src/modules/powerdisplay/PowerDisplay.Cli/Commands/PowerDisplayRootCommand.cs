@@ -19,10 +19,8 @@ public sealed partial class PowerDisplayRootCommand : RootCommand
     public PowerDisplayRootCommand()
         : base("PowerToys PowerDisplay - control monitor settings from the command line.")
     {
-        AddGlobalOption(CliOptions.Json);
         AddGlobalOption(CliOptions.Quiet);
         AddGlobalOption(CliOptions.TimeoutSeconds);
-        AddGlobalOption(CliOptions.MaxCompatibility);
 
         ListCommand = BuildList();
         CapabilitiesCommand = BuildCapabilities();

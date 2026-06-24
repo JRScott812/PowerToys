@@ -29,13 +29,6 @@ public static class CliOptions
         Arity = ArgumentArity.ZeroOrOne,
     };
 
-    public static readonly Option<bool> Json = new(
-        ["--json"],
-        "Emit machine-readable JSON instead of human-readable text.")
-    {
-        Arity = ArgumentArity.ZeroOrOne,
-    };
-
     public static readonly Option<string?> SettingFilter = new(
         ["--setting"],
         "Restrict 'get' to a single setting name (e.g. brightness, input-source).")
@@ -104,13 +97,6 @@ public static class CliOptions
     public static readonly Option<bool> Quiet = new(
         ["--quiet"],
         "Suppress warning messages on stderr.")
-    {
-        Arity = ArgumentArity.ZeroOrOne,
-    };
-
-    public static readonly Option<bool?> MaxCompatibility = new(
-        ["--max-compatibility"],
-        "Force max-compatibility discovery on/off, overriding the saved PowerDisplay setting.")
     {
         Arity = ArgumentArity.ZeroOrOne,
     };
