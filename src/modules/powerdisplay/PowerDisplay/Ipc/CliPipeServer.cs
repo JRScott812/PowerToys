@@ -109,12 +109,17 @@ public sealed class CliPipeServer
         Logger.LogInfo("[PowerDisplay CLI IPC] Server stopped.");
     }
 
+    // BOM-less UTF-16 LE — must match CliPipeClient.  Encoding.Unicode emits a BOM on the first
+    // write which corrupts line-framing on named pipes; this encoding is identical in every other
+    // respect (UTF-16 LE, 2 bytes per ASCII char).
+    private static readonly Encoding _pipeEncoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: false);
+
     private async Task ServeOneAsync(NamedPipeServerStream server, CancellationToken ct)
     {
         // leaveOpen: true — the pipe stream is owned by the caller; disposing reader/writer
         // must not close it prematurely.
-        using var reader = new StreamReader(server, Encoding.Unicode, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
-        using var writer = new StreamWriter(server, Encoding.Unicode, bufferSize: 1024, leaveOpen: true) { AutoFlush = true };
+        using var reader = new StreamReader(server, _pipeEncoding, detectEncodingFromByteOrderMarks: false, bufferSize: 1024, leaveOpen: true);
+        using var writer = new StreamWriter(server, _pipeEncoding, bufferSize: 1024, leaveOpen: true) { AutoFlush = true };
 
         var requestJson = await reader.ReadLineAsync(ct).ConfigureAwait(false);
         if (string.IsNullOrEmpty(requestJson))

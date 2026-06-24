@@ -51,9 +51,12 @@ public class CliPipeClientTests
             serverReady.Release(); // signal: server is now listening
             await server.WaitForConnectionAsync();
 
-            // Mirror the server protocol: Unicode, leaveOpen: true, one read + one write
-            using var reader = new StreamReader(server, Encoding.Unicode, false, 1024, leaveOpen: true);
-            using var writer = new StreamWriter(server, Encoding.Unicode, 1024, leaveOpen: true) { AutoFlush = true };
+            // Mirror the server protocol: BOM-less UTF-16 LE (same as CliPipeClient / CliPipeServer).
+            // Encoding.Unicode emits a UTF-16 BOM on first write which corrupts line-framing; use
+            // UnicodeEncoding with byteOrderMark:false to stay byte-compatible with both sides.
+            var pipeEncoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: false);
+            using var reader = new StreamReader(server, pipeEncoding, false, 1024, leaveOpen: true);
+            using var writer = new StreamWriter(server, pipeEncoding, 1024, leaveOpen: true) { AutoFlush = true };
 
             var line = await reader.ReadLineAsync();
             // Echo back the canned response regardless of what was sent
@@ -95,7 +98,18 @@ public class CliPipeClientTests
         cts.Cancel(); // pre-cancelled
 
         var client = new CliPipeClient();
-        await Assert.ThrowsExceptionAsync<OperationCanceledException>(
-            () => client.SendAsync(@"{""command"":""list""}", ConnectTimeout, cts.Token));
+
+        // Assert.ThrowsExceptionAsync<T> matches the exact type, so TaskCanceledException
+        // (which derives from OperationCanceledException) would fail it.  Use a manual
+        // try/catch so any subclass of OperationCanceledException is accepted.
+        try
+        {
+            await client.SendAsync(@"{""command"":""list""}", ConnectTimeout, cts.Token);
+            Assert.Fail("Expected the operation to be cancelled.");
+        }
+        catch (OperationCanceledException)
+        {
+            // expected (TaskCanceledException derives from OperationCanceledException)
+        }
     }
 }

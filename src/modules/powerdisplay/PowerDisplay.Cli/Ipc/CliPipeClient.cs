@@ -16,7 +16,7 @@ namespace PowerDisplay.Cli.Ipc;
 /// CLI-side named-pipe client that connects to the running PowerDisplay app, sends one request
 /// line, reads one response line, and returns <see langword="null"/> on connect failure or timeout.
 /// <para>
-/// <b>Protocol:</b> Unicode encoding, <c>'\n'</c>-delimited lines, one request → one response.
+/// <b>Protocol:</b> BOM-less UTF-16 LE encoding, <c>'\n'</c>-delimited lines, one request → one response.
 /// Mirrors the app-side <c>CliPipeServer</c> in <c>PowerDisplay/Ipc/CliPipeServer.cs</c>.
 /// </para>
 /// </summary>
@@ -36,6 +36,11 @@ public sealed class CliPipeClient
     /// The response JSON line on success; <see langword="null"/> when the app is not running,
     /// the pipe is unavailable, or the connection timed out.
     /// </returns>
+    // BOM-less UTF-16 LE — must match CliPipeServer.  Encoding.Unicode emits a BOM on the first
+    // write which corrupts line-framing on named pipes; this encoding is identical in every other
+    // respect (UTF-16 LE, 2 bytes per ASCII char).
+    private static readonly Encoding _pipeEncoding = new UnicodeEncoding(bigEndian: false, byteOrderMark: false);
+
     public async Task<string?> SendAsync(string requestJson, TimeSpan connectTimeout, CancellationToken ct)
     {
         try
@@ -43,8 +48,8 @@ public sealed class CliPipeClient
             using var client = new NamedPipeClientStream(".", PipeNames.CliServer(), PipeDirection.InOut, PipeOptions.Asynchronous);
             await client.ConnectAsync((int)connectTimeout.TotalMilliseconds, ct);
 
-            using var writer = new StreamWriter(client, Encoding.Unicode, 1024, leaveOpen: true) { AutoFlush = true };
-            using var reader = new StreamReader(client, Encoding.Unicode, false, 1024, leaveOpen: true);
+            using var writer = new StreamWriter(client, _pipeEncoding, 1024, leaveOpen: true) { AutoFlush = true };
+            using var reader = new StreamReader(client, _pipeEncoding, false, 1024, leaveOpen: true);
 
             await writer.WriteLineAsync(requestJson.AsMemory(), ct);
             return await reader.ReadLineAsync(ct);
