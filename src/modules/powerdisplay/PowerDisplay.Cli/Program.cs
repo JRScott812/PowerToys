@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain via CLI->Lib->interop chain); build+verify on dev box.
 
 using System;
 using System.Collections.Generic;
@@ -18,8 +16,8 @@ using PowerDisplay.Cli.Commands;
 using PowerDisplay.Cli.Ipc;
 using PowerDisplay.Cli.Options;
 using PowerDisplay.Cli.Output;
-using PowerDisplay.Contracts;
 using PowerDisplay.Cli.Properties;
+using PowerDisplay.Contracts;
 
 namespace PowerDisplay.Cli;
 

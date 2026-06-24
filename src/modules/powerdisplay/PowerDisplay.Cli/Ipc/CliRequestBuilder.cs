@@ -1,13 +1,11 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain via CLI->Lib->interop chain); build+verify on dev box.
-
-namespace PowerDisplay.Cli.Ipc;
 
 using PowerDisplay.Cli.Commands;
 using PowerDisplay.Contracts;
+
+namespace PowerDisplay.Cli.Ipc;
 
 /// <summary>
 /// Maps parsed CLI arguments into a <see cref="CliRequestEnvelope"/> ready for IPC serialization.
@@ -47,12 +45,12 @@ public static class CliRequestBuilder
         var (settingName, rawValue) = inputs switch
         {
             { Brightness: { } v } => ("brightness", v.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            { Contrast: { } v }   => ("contrast",   v.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            { Volume: { } v }     => ("volume",      v.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            { Contrast: { } v } => ("contrast", v.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            { Volume: { } v } => ("volume", v.ToString(System.Globalization.CultureInfo.InvariantCulture)),
             { ColorTemperature: { } v } => ("color-temperature", v),
-            { InputSource: { } v }      => ("input-source",      v),
-            { PowerState: { } v }       => ("power-state",       v),
-            { Orientation: { } v }      => ("orientation",        v),
+            { InputSource: { } v } => ("input-source", v),
+            { PowerState: { } v } => ("power-state", v),
+            { Orientation: { } v } => ("orientation", v),
             _ => throw new System.InvalidOperationException(
                 "BuildSet called without any setting; callers must validate CountSelectedSettings == 1 first."),
         };

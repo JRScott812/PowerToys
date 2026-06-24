@@ -1,8 +1,6 @@
 // Copyright (c) Microsoft Corporation
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
-//
-// [UNVERIFIED] Not compiled (no VS C++ toolchain via CLI->Lib->interop chain); build+verify on dev box.
 
 using System;
 using System.Text.Json;
@@ -52,49 +50,54 @@ public sealed class IpcDispatcher
     }
 
     // ── per-command dispatch helpers ─────────────────────────────────────────
-
     public Task<int> SendListAsync(CliRequestEnvelope envelope, CancellationToken ct)
-        => SendAndRenderAsync(envelope, ct,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliListResult,
-                result => { _output.WriteListResult(result); return CliExitCodes.Ok; }));
+        => SendAndRenderAsync(
+            envelope,
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliListResult, result => { _output.WriteListResult(result); return CliExitCodes.Ok; }),
+            ct);
 
     public Task<int> SendGetAsync(CliRequestEnvelope envelope, CancellationToken ct)
-        => SendAndRenderAsync(envelope, ct,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliGetResult,
-                result => { _output.WriteGetResult(result); return CliExitCodes.Ok; }));
+        => SendAndRenderAsync(
+            envelope,
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliGetResult, result => { _output.WriteGetResult(result); return CliExitCodes.Ok; }),
+            ct);
 
     public Task<int> SendSetAsync(CliRequestEnvelope envelope, CancellationToken ct)
-        => SendAndRenderAsync(envelope, ct,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliSetResult,
-                result => { _output.WriteSetResult(result); return CliExitCodes.Ok; }));
+        => SendAndRenderAsync(
+            envelope,
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliSetResult, result => { _output.WriteSetResult(result); return CliExitCodes.Ok; }),
+            ct);
 
     public Task<int> SendCapabilitiesAsync(CliRequestEnvelope envelope, CancellationToken ct)
-        => SendAndRenderAsync(envelope, ct,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliCapabilitiesResult,
-                result => { _output.WriteCapabilitiesResult(result); return CliExitCodes.Ok; }));
+        => SendAndRenderAsync(
+            envelope,
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliCapabilitiesResult, result => { _output.WriteCapabilitiesResult(result); return CliExitCodes.Ok; }),
+            ct);
 
     public Task<int> SendProfilesAsync(CliRequestEnvelope envelope, CancellationToken ct)
-        => SendAndRenderAsync(envelope, ct,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliProfileListResult,
-                result => { _output.WriteProfileListResult(result); return CliExitCodes.Ok; }));
+        => SendAndRenderAsync(
+            envelope,
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliProfileListResult, result => { _output.WriteProfileListResult(result); return CliExitCodes.Ok; }),
+            ct);
 
     public Task<int> SendApplyProfileAsync(CliRequestEnvelope envelope, CancellationToken ct)
-        => SendAndRenderAsync(envelope, ct,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliApplyProfileResult,
-                result =>
-                {
-                    _output.WriteApplyProfileResult(result);
-                    // Return the worst-outcome exit code carried by the DTO (0=Ok, 2=OutOfRange, 5=HardwareFailure).
-                    // Previously this was hardcoded to HardwareFailure when Ok=false, losing OutOfRange(2) partials.
-                    return result.ExitCode;
-                }));
+        => SendAndRenderAsync(
+            envelope,
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliApplyProfileResult, result =>
+            {
+                _output.WriteApplyProfileResult(result);
+
+                // Return the worst-outcome exit code carried by the DTO (0=Ok, 2=OutOfRange, 5=HardwareFailure).
+                // Previously this was hardcoded to HardwareFailure when Ok=false, losing OutOfRange(2) partials.
+                return result.ExitCode;
+            }),
+            ct);
 
     // ── core flow ────────────────────────────────────────────────────────────
-
     private async Task<int> SendAndRenderAsync(
         CliRequestEnvelope envelope,
-        CancellationToken ct,
-        Func<string, int> renderSuccess)
+        Func<string, int> renderSuccess,
+        CancellationToken ct)
     {
         var requestJson = JsonSerializer.Serialize(envelope, ContractsJsonContext.Default.CliRequestEnvelope);
         var respJson = await _send(requestJson, _timeout, ct);
