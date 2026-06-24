@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 
-namespace PowerDisplay.Cli.Output;
+namespace PowerDisplay.Contracts;
 
 /// <summary>
 /// Result envelope of <c>powerdisplay get</c>. Always carries a list — a single-monitor

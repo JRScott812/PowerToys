@@ -5,8 +5,7 @@
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PowerDisplay.Cli.Commands;
-using PowerDisplay.Cli.Errors;
-using PowerDisplay.Cli.Output;
+using PowerDisplay.Contracts;
 using PowerDisplay.Models;
 
 namespace PowerDisplay.Cli.UnitTests;

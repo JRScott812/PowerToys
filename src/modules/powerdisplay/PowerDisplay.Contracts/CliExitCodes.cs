@@ -2,7 +2,7 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-namespace PowerDisplay.Cli.Errors;
+namespace PowerDisplay.Contracts;
 
 public static class CliExitCodes
 {
@@ -16,4 +16,7 @@ public static class CliExitCodes
     public const int ArgumentError = 7;
     public const int Timeout = 8;
     public const int InternalError = 9;
+
+    /// <summary>The PowerDisplay app/provider is not running or could not be reached.</summary>
+    public const int ProviderUnavailable = 10;
 }

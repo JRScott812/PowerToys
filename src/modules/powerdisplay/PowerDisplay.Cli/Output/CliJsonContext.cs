@@ -3,6 +3,7 @@
 // See the LICENSE file in the project root for more information.
 
 using System.Text.Json.Serialization;
+using PowerDisplay.Contracts;
 
 namespace PowerDisplay.Cli.Output;
 

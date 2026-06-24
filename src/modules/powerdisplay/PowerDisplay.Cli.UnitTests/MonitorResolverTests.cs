@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using PowerDisplay.Cli.Errors;
+using PowerDisplay.Contracts;
 using PowerDisplay.Cli.Resolution;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 

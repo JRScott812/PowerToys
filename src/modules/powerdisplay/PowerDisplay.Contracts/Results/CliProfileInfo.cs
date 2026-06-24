@@ -2,7 +2,7 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-namespace PowerDisplay.Cli.Output;
+namespace PowerDisplay.Contracts;
 
 /// <summary>
 /// One row in the <c>profiles</c> list: a saved profile's name, how many monitors it

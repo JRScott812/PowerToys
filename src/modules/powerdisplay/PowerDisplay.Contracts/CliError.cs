@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 
-namespace PowerDisplay.Cli.Errors;
+namespace PowerDisplay.Contracts;
 
 /// <summary>
 /// Structured CLI error returned by validators and commands. Mapped 1:1 to the JSON

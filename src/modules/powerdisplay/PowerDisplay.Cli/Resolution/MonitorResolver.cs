@@ -4,7 +4,7 @@
 
 using System;
 using System.Collections.Generic;
-using PowerDisplay.Cli.Errors;
+using PowerDisplay.Contracts;
 using PowerDisplay.Cli.Properties;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 

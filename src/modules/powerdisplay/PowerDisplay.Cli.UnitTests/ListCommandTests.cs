@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PowerDisplay.Cli.Commands;
-using PowerDisplay.Cli.Output;
+using PowerDisplay.Contracts;
 using PowerDisplay.Cli.UnitTests.Fakes;
 using PowerDisplay.Common.Models;
 using Monitor = PowerDisplay.Common.Models.Monitor;

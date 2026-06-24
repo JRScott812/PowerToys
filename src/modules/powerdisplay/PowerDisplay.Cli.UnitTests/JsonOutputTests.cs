@@ -5,8 +5,7 @@
 using System.IO;
 using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using PowerDisplay.Cli.Errors;
-using PowerDisplay.Cli.Output;
+using PowerDisplay.Contracts;
 
 namespace PowerDisplay.Cli.UnitTests;
 

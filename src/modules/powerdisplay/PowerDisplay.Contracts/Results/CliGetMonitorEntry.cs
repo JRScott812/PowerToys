@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 
-namespace PowerDisplay.Cli.Output;
+namespace PowerDisplay.Contracts;
 
 /// <summary>
 /// One monitor's current-settings block inside a <see cref="CliGetResult"/>. Carries

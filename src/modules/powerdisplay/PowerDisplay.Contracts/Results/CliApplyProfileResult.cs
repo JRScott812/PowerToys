@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 
-namespace PowerDisplay.Cli.Output;
+namespace PowerDisplay.Contracts;
 
 public sealed class CliApplyProfileResult
 {

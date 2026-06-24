@@ -2,7 +2,7 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-namespace PowerDisplay.Cli.Errors;
+namespace PowerDisplay.Contracts;
 
 /// <summary>
 /// Stable error codes emitted as <c>error.code</c> in JSON output.
@@ -18,4 +18,5 @@ public static class CliErrorCodes
     public const string ArgumentError = "ARGUMENT_ERROR";
     public const string Timeout = "TIMEOUT";
     public const string InternalError = "INTERNAL_ERROR";
+    public const string ProviderUnavailable = "PROVIDER_UNAVAILABLE";
 }

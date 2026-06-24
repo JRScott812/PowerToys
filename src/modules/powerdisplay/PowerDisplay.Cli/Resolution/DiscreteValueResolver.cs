@@ -6,7 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using PowerDisplay.Cli.Errors;
+using PowerDisplay.Contracts;
 using PowerDisplay.Cli.Properties;
 using PowerDisplay.Common.Utils;
 

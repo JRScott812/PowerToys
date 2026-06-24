@@ -4,8 +4,7 @@
 
 using System.Collections.Generic;
 using System.Globalization;
-using PowerDisplay.Cli.Errors;
-using PowerDisplay.Cli.Output;
+using PowerDisplay.Contracts;
 using PowerDisplay.Models;
 
 namespace PowerDisplay.Cli.Commands;

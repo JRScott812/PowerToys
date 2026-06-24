@@ -2,7 +2,7 @@
 // The Microsoft Corporation licenses this file to you under the MIT license.
 // See the LICENSE file in the project root for more information.
 
-namespace PowerDisplay.Cli.Output;
+namespace PowerDisplay.Contracts;
 
 /// <summary>
 /// Compact identification of a monitor used inside every JSON response so

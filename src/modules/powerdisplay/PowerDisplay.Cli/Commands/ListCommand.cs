@@ -5,8 +5,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using PowerDisplay.Cli.Errors;
-using PowerDisplay.Cli.Output;
+using PowerDisplay.Contracts;
 using PowerDisplay.Common.Services;
 using Monitor = PowerDisplay.Common.Models.Monitor;
 

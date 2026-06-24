@@ -4,7 +4,7 @@
 
 using System.Collections.Generic;
 
-namespace PowerDisplay.Cli.Output;
+namespace PowerDisplay.Contracts;
 
 /// <summary>
 /// Per-monitor outcome of an <c>apply-profile</c> run.
