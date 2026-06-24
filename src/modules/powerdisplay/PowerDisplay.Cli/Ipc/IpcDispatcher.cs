@@ -84,8 +84,9 @@ public sealed class IpcDispatcher
                 result =>
                 {
                     _output.WriteApplyProfileResult(result);
-                    // apply-profile uses Ok=false to signal partial failure; map to exit code.
-                    return result.Ok ? CliExitCodes.Ok : CliExitCodes.HardwareFailure;
+                    // Return the worst-outcome exit code carried by the DTO (0=Ok, 2=OutOfRange, 5=HardwareFailure).
+                    // Previously this was hardcoded to HardwareFailure when Ok=false, losing OutOfRange(2) partials.
+                    return result.ExitCode;
                 }));
 
     // ── core flow ────────────────────────────────────────────────────────────
@@ -148,19 +149,6 @@ public sealed class IpcDispatcher
         }
     }
 
-    private static T? TryDeserialize<T>(string respJson, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
-        where T : class
-    {
-        try
-        {
-            return JsonSerializer.Deserialize(respJson, typeInfo);
-        }
-        catch (JsonException)
-        {
-            return null;
-        }
-    }
-
     private static int Deserialize<T>(
         string respJson,
         System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo,
@@ -176,6 +164,7 @@ public sealed class IpcDispatcher
     {
         _output.WriteError(new CliErrorResult
         {
+            Ok = false,
             Command = command,
             Error = new CliError
             {

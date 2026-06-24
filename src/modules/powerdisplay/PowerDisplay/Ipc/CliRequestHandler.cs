@@ -219,7 +219,8 @@ public sealed class CliRequestHandler
                     });
                 }
 
-                var (applyResult, _exitCode) = ProfileDtoProjector.BuildApplyProfileResult(profileName, outcomes);
+                // ExitCode is now carried in applyResult.ExitCode; the tuple int is no longer needed.
+                var (applyResult, _) = ProfileDtoProjector.BuildApplyProfileResult(profileName, outcomes);
                 return Serialize(applyResult);
             }
 

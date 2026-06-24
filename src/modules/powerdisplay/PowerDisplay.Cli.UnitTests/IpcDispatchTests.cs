@@ -217,6 +217,83 @@ public class IpcDispatchTests
         Assert.AreEqual(CliExitCodes.HardwareFailure, exit);
     }
 
+    // ── apply-profile exit-code carried through IPC ───────────────────────────
+
+    /// <summary>
+    /// Verifies that when the app returns a canned CliApplyProfileResult with Ok=false and
+    /// ExitCode=2 (OutOfRange), the CLI dispatcher returns exit 2, NOT the old hardcoded 5
+    /// (HardwareFailure). This is the regression test for the apply-profile exit-code bug.
+    /// [UNVERIFIED] Not compiled (no VS C++ toolchain via CLI->Lib->interop chain); build+verify on dev box.
+    /// </summary>
+    [TestMethod]
+    public async Task ApplyProfile_OutOfRange_partial_failure_exits_2()
+    {
+        var output = new CaptureOutput();
+        var responseJson = SerializeSuccess(
+            new CliApplyProfileResult
+            {
+                Ok = false,
+                ExitCode = CliExitCodes.OutOfRange,
+                Profile = "Night",
+                Monitors = new List<CliProfileMonitorOutcome>
+                {
+                    new CliProfileMonitorOutcome
+                    {
+                        Monitor = new CliMonitorRef { Number = 1, Id = "MON1", Name = "Monitor A" },
+                        Connected = true,
+                        Changes = new List<CliProfileChange>
+                        {
+                            new CliProfileChange { Setting = "brightness", Value = 110, Status = CliProfileChange.StatusOutOfRange },
+                        },
+                    },
+                },
+            },
+            ContractsJsonContext.Default.CliApplyProfileResult);
+        var dispatcher = MakeDispatcher(responseJson, output);
+        var exit = await dispatcher.SendApplyProfileAsync(CliRequestBuilder.BuildApplyProfile("Night"), CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.OutOfRange, exit, "OutOfRange partial failure must return exit 2, not hardcoded HardwareFailure(5)");
+        Assert.AreEqual(1, output.StdoutLines.Count);
+    }
+
+    [TestMethod]
+    public async Task ApplyProfile_HardwareFailure_exits_5()
+    {
+        var output = new CaptureOutput();
+        var responseJson = SerializeSuccess(
+            new CliApplyProfileResult
+            {
+                Ok = false,
+                ExitCode = CliExitCodes.HardwareFailure,
+                Profile = "Gaming",
+                Monitors = new List<CliProfileMonitorOutcome>(),
+            },
+            ContractsJsonContext.Default.CliApplyProfileResult);
+        var dispatcher = MakeDispatcher(responseJson, output);
+        var exit = await dispatcher.SendApplyProfileAsync(CliRequestBuilder.BuildApplyProfile("Gaming"), CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.HardwareFailure, exit);
+    }
+
+    [TestMethod]
+    public async Task ApplyProfile_full_success_exits_0()
+    {
+        var output = new CaptureOutput();
+        var responseJson = SerializeSuccess(
+            new CliApplyProfileResult
+            {
+                Ok = true,
+                ExitCode = CliExitCodes.Ok,
+                Profile = "Work",
+                Monitors = new List<CliProfileMonitorOutcome>(),
+            },
+            ContractsJsonContext.Default.CliApplyProfileResult);
+        var dispatcher = MakeDispatcher(responseJson, output);
+        var exit = await dispatcher.SendApplyProfileAsync(CliRequestBuilder.BuildApplyProfile("Work"), CancellationToken.None);
+
+        Assert.AreEqual(CliExitCodes.Ok, exit);
+    }
+
     // ── CliRequestBuilder round-trips ────────────────────────────────────────
 
     [TestMethod]

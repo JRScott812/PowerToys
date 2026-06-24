@@ -106,3 +106,32 @@ Tests coverage:
 4. **`IpcDispatcher.SendApplyProfileAsync` exit code**: For partial failures, the app sends a `CliApplyProfileResult` with `Ok=false` (hardware failure or out-of-range). The dispatcher returns `CliExitCodes.HardwareFailure` for this case. If out-of-range partial failures should return `CliExitCodes.OutOfRange` (2), the app-side response would need to carry an explicit exit code. This was a simplification; verify with app-side team.
 
 5. **All Command files still reference PowerDisplay.Common.Models/Services**: The old command files (`SetCommand.cs`, `GetCommand.cs`, etc.) still exist with their in-process implementations. They compile but are never called by the new `DispatchAsync`. Task 5.1 will remove these or the Lib ProjectReference. There is no code removal risk — dead code that still compiles.
+
+## Fix (review findings, apply-profile exit code)
+
+### Root Cause
+`CliApplyProfileResult` had no `ExitCode` field, so the worst-outcome code computed in `ProfileDtoProjector.BuildApplyProfileResult` was discarded by `CliRequestHandler` (`var (applyResult, _exitCode) = ...`) and never serialized to the wire. `IpcDispatcher.SendApplyProfileAsync` then hardcoded `Ok==false → HardwareFailure(5)`, making OutOfRange(2) partial failures report exit 5 instead of 2.
+
+### Contracts change (VERIFIED)
+- Added `public int ExitCode { get; init; } = CliExitCodes.Ok;` to `PowerDisplay.Contracts/Results/CliApplyProfileResult.cs`.
+- Extended `RoundTripTests.cs`:
+  - Added `Assert.AreEqual(CliExitCodes.Ok, back.ExitCode)` to the existing `CliApplyProfileResult_round_trips_with_outcomes` test.
+  - Added new `CliApplyProfileResult_ExitCode_survives_round_trip` test: sets `ExitCode = CliExitCodes.OutOfRange` (2), round-trips through JSON, asserts value survives.
+- **Test result:** `Passed! - Failed: 0, Passed: 14, Skipped: 0, Total: 14` (`dotnet test ... -c Debug -p:Platform=x64 -r win-x64`)
+
+### App projector fix [UNVERIFIED]
+- `ProfileDtoProjector.BuildApplyProfileResult` (`PowerDisplay/Ipc/ProfileDtoProjector.cs`): added `ExitCode = exitCode` to the `CliApplyProfileResult` initializer. The tuple return signature is unchanged; the DTO now carries the exit code redundantly.
+
+### App handler fix [UNVERIFIED]
+- `CliRequestHandler.BuildResponseAsync` (`PowerDisplay/Ipc/CliRequestHandler.cs`, ~line 222): renamed `_exitCode` discard to `_` with a comment clarifying the exit code now travels in `applyResult.ExitCode`. `Serialize(applyResult)` serializes all fields including `ExitCode`.
+
+### CLI dispatcher fix [UNVERIFIED]
+- `IpcDispatcher.SendApplyProfileAsync` (`PowerDisplay.Cli/Ipc/IpcDispatcher.cs`): replaced `result.Ok ? CliExitCodes.Ok : CliExitCodes.HardwareFailure` with `result.ExitCode`. The DTO-carried exit code is now returned directly.
+
+### Minors [UNVERIFIED]
+- Removed unused `TryDeserialize<T>` generic helper from `IpcDispatcher.cs` (was declared but never called; `TryDeserializeError` is a separate non-generic method).
+- Added explicit `Ok = false` to `WriteProviderUnavailable`'s `CliErrorResult` construction for consistency with the contract invariant.
+- Added three new tests to `IpcDispatchTests.cs`: `ApplyProfile_OutOfRange_partial_failure_exits_2` (the regression test, asserts exit 2 not 5), `ApplyProfile_HardwareFailure_exits_5`, `ApplyProfile_full_success_exits_0`. Marked `[UNVERIFIED]` in class-level remarks; cannot compile in this environment.
+
+### Residual uncertainty
+- App and CLI sides (`PowerDisplay`, `PowerDisplay.Cli`) were not compiled — no C++ interop toolchain available. The projector, handler, and dispatcher changes are syntactically correct by static inspection; build+verify on dev box before merging.

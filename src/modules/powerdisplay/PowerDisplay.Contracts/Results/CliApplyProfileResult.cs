@@ -15,6 +15,13 @@ public sealed class CliApplyProfileResult
     /// </summary>
     public bool Ok { get; init; } = true;
 
+    /// <summary>
+    /// The process exit code that reflects the worst outcome across all applied settings.
+    /// Precedence: HardwareFailure (5) &gt; OutOfRange (2) &gt; Ok (0).
+    /// Defaults to <see cref="CliExitCodes.Ok"/> (0) when all settings applied successfully.
+    /// </summary>
+    public int ExitCode { get; init; } = CliExitCodes.Ok;
+
     public string Version { get; init; } = CliSchema.Version;
 
     public string Command { get; init; } = "apply-profile";
