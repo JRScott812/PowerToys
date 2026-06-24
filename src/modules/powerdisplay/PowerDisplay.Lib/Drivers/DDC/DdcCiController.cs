@@ -502,8 +502,15 @@ namespace PowerDisplay.Common.Drivers.DDC
         {
             if (TryGetVcpFeature(handle, VcpCodeContrast, monitor.Id, out uint current, out uint max))
             {
-                monitor.ContrastVcpMax = (int)max;
                 var contrastInfo = new VcpFeatureValue((int)current, 0, (int)max);
+                if (!contrastInfo.IsValid)
+                {
+                    Logger.LogWarning(
+                        $"DDC: [{monitor.Id}] Ignoring invalid contrast range current={current}, max={max}");
+                    return;
+                }
+
+                monitor.ContrastVcpMax = (int)max;
                 monitor.CurrentContrast = contrastInfo.ToPercentage();
                 monitor.ReadValues |= MonitorReadFlags.Contrast;
             }
@@ -517,8 +524,15 @@ namespace PowerDisplay.Common.Drivers.DDC
         {
             if (TryGetVcpFeature(handle, VcpCodeVolume, monitor.Id, out uint current, out uint max))
             {
-                monitor.VolumeVcpMax = (int)max;
                 var volumeInfo = new VcpFeatureValue((int)current, 0, (int)max);
+                if (!volumeInfo.IsValid)
+                {
+                    Logger.LogWarning(
+                        $"DDC: [{monitor.Id}] Ignoring invalid volume range current={current}, max={max}");
+                    return;
+                }
+
+                monitor.VolumeVcpMax = (int)max;
                 monitor.CurrentVolume = volumeInfo.ToPercentage();
                 monitor.ReadValues |= MonitorReadFlags.Volume;
             }

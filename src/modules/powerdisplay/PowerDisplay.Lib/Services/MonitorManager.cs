@@ -20,9 +20,11 @@ using Monitor = PowerDisplay.Common.Models.Monitor;
 namespace PowerDisplay.Common.Services
 {
     /// <summary>
-    /// Monitor manager for unified control of all monitors
-    /// No interface abstraction - KISS principle (only one implementation needed)
+    /// Monitor manager for unified control of all monitors. Implements <see cref="IMonitorManager"/>
+    /// so consumers (e.g. the headless CLI) can depend on the abstraction and be unit-tested against a fake.
     /// </summary>
+    // 'partial' is required by the CsWinRT source generator (CsWinRT1028) for AOT/trimming
+    // compatibility because the type crosses the WinRT ABI; do not remove it.
     public partial class MonitorManager : IDisposable, IMonitorManager
     {
         private readonly List<Monitor> _monitors = new();
@@ -74,9 +76,9 @@ namespace PowerDisplay.Common.Services
         }
 
         /// <summary>
-        /// Pushes the max-compatibility-mode flag onto the DDC/CI controller. Called by
-        /// <see cref="ViewModels.MainViewModel"/> before each discovery so the value is
-        /// current. No-op if the DDC controller failed to initialize.
+        /// Pushes the max-compatibility-mode flag onto the DDC/CI controller. Callers (the GUI's
+        /// MainViewModel and the headless CLI) invoke this before discovery so the value is current.
+        /// No-op if the DDC controller failed to initialize.
         /// </summary>
         public void SetMaxCompatibilityMode(bool enabled)
         {
