@@ -6,6 +6,7 @@ using System;
 using System.IO;
 using System.Linq;
 using PowerDisplay.Cli.Properties;
+using PowerDisplay.Contracts;
 
 namespace PowerDisplay.Cli.Output;
 

@@ -53,31 +53,51 @@ public sealed class IpcDispatcher
     public Task<int> SendListAsync(CliRequestEnvelope envelope, CancellationToken ct)
         => SendAndRenderAsync(
             envelope,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliListResult, result => { _output.WriteListResult(result); return CliExitCodes.Ok; }),
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliListResult, result =>
+            {
+                _output.WriteListResult(result);
+                return CliExitCodes.Ok;
+            }),
             ct);
 
     public Task<int> SendGetAsync(CliRequestEnvelope envelope, CancellationToken ct)
         => SendAndRenderAsync(
             envelope,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliGetResult, result => { _output.WriteGetResult(result); return CliExitCodes.Ok; }),
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliGetResult, result =>
+            {
+                _output.WriteGetResult(result);
+                return CliExitCodes.Ok;
+            }),
             ct);
 
     public Task<int> SendSetAsync(CliRequestEnvelope envelope, CancellationToken ct)
         => SendAndRenderAsync(
             envelope,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliSetResult, result => { _output.WriteSetResult(result); return CliExitCodes.Ok; }),
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliSetResult, result =>
+            {
+                _output.WriteSetResult(result);
+                return CliExitCodes.Ok;
+            }),
             ct);
 
     public Task<int> SendCapabilitiesAsync(CliRequestEnvelope envelope, CancellationToken ct)
         => SendAndRenderAsync(
             envelope,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliCapabilitiesResult, result => { _output.WriteCapabilitiesResult(result); return CliExitCodes.Ok; }),
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliCapabilitiesResult, result =>
+            {
+                _output.WriteCapabilitiesResult(result);
+                return CliExitCodes.Ok;
+            }),
             ct);
 
     public Task<int> SendProfilesAsync(CliRequestEnvelope envelope, CancellationToken ct)
         => SendAndRenderAsync(
             envelope,
-            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliProfileListResult, result => { _output.WriteProfileListResult(result); return CliExitCodes.Ok; }),
+            respJson => Deserialize(respJson, ContractsJsonContext.Default.CliProfileListResult, result =>
+            {
+                _output.WriteProfileListResult(result);
+                return CliExitCodes.Ok;
+            }),
             ct);
 
     public Task<int> SendApplyProfileAsync(CliRequestEnvelope envelope, CancellationToken ct)
